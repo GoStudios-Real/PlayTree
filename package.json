@@ -1,0 +1,26 @@
+{
+  "name": "playtree-chapter1-season1",
+  "version": "1.0.0",
+  "description": "PlayTree - Chapter I: Season I. An original sandbox-adventure game platform.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/server.mjs",
+    "dev": "node server/server.mjs --watch",
+    "test": "node tests/run-tests.mjs",
+    "check": "node scripts/check-syntax.mjs && node scripts/check-exports.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "game",
+    "sandbox",
+    "voxel",
+    "threejs",
+    "battle-royale",
+    "creative",
+    "survival",
+    "multiplayer"
+  ]
+}
