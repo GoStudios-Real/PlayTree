@@ -134,6 +134,50 @@ export const Structures = {
       B(world, ox + radius, oy + 1, oz + x, 36);
     }
   },
+
+  // MJ Dance Stage: raised platform with speakers, spotlights, and dance floor
+  mjStage(world, ox, oy, oz, rng) {
+    const W = 9, D = 7;
+    // Dance floor (alternating light/dark tiles)
+    for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {
+      const light = (x + z) % 2 === 0;
+      B(world, ox + x, oy, oz + z, light ? 40 : 43);
+    }
+    // Raised stage edge
+    for (let x = -1; x <= W; x++) {
+      B(world, ox + x, oy + 1, oz - 1, 36);
+      B(world, ox + x, oy + 1, oz + D, 36);
+    }
+    for (let z = 0; z < D; z++) {
+      B(world, ox - 1, oy + 1, oz + z, 36);
+      B(world, ox + W, oy + 1, oz + z, 36);
+    }
+    // Speakers (left and right)
+    for (let y = 1; y <= 3; y++) {
+      B(world, ox - 1, oy + y, oz - 1, 44);
+      B(world, ox + W, oy + y, oz - 1, 44);
+      B(world, ox - 1, oy + y, oz + D, 44);
+      B(world, ox + W, oy + y, oz + D, 44);
+    }
+    // Speaker tops (glowing)
+    B(world, ox - 1, oy + 4, oz - 1, 22);
+    B(world, ox + W, oy + 4, oz - 1, 22);
+    B(world, ox - 1, oy + 4, oz + D, 22);
+    B(world, ox + W, oy + 4, oz + D, 22);
+    // Spotlights on poles
+    for (let y = 1; y <= 5; y++) {
+      B(world, ox + Math.floor(W / 2), oy + y, oz - 2, 9);
+    }
+    B(world, ox + Math.floor(W / 2), oy + 6, oz - 2, 22);
+    // DJ booth at back
+    for (let x = 2; x <= 6; x++) B(world, ox + x, oy + 1, oz + D + 1, 38);
+    B(world, ox + 4, oy + 2, oz + D + 1, 46);
+    // Floor lights
+    B(world, ox + 1, oy + 1, oz + 1, 22);
+    B(world, ox + W - 2, oy + 1, oz + 1, 22);
+    B(world, ox + 1, oy + 1, oz + D - 2, 22);
+    B(world, ox + W - 2, oy + 1, oz + D - 2, 22);
+  },
 };
 
 export function buildVillage(world, cx, cz, rng) {
@@ -155,6 +199,7 @@ export function buildVillage(world, cx, cz, rng) {
   Structures.stall(world, cx - 2, oy, cz - 8, rng);
   Structures.stall(world, cx + 3, oy, cz + 9, rng);
   Structures.shrine(world, cx, oy, cz - 14, rng);
+  Structures.mjStage(world, cx - 10, oy, cz + 10, rng);
   return { oy };
 }
 

@@ -4,6 +4,7 @@
 import { Mob } from './Mob.js';
 import { Enemy } from './Enemy.js';
 import { NPC } from './NPC.js';
+import { MJ } from './MJ.js';
 import { Projectile } from './Projectile.js';
 import { LootDrop } from './LootDrop.js';
 import { BIOMES } from '../world/TerrainGenerator.js';
@@ -59,6 +60,13 @@ export class EntityManager {
     this.register(n);
     this.npcs.set(n.id, n);
     return n;
+  }
+
+  spawnMJ(x, y, z, opts = {}) {
+    const mj = new MJ(this.world, x, y, z, opts);
+    this.register(mj);
+    this.npcs.set(mj.id, mj);
+    return mj;
   }
 
   spawnProjectile(opts) {

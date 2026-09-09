@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PlayTree</string>
+    <string name="title_activity_main">PlayTree</string>
+    <string name="package_name">com.playtree.season1</string>
+    <string name="custom_url_scheme">com.playtree.season1</string>
+</resources>

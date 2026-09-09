@@ -1,0 +1,8 @@
+{
+  "appId": "com.playtree.season1",
+  "appName": "PlayTree",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

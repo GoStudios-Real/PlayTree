@@ -15,19 +15,25 @@ export const COSMETICS = [
 ];
 
 export const EMOTES = [
-  { id: 'wave', name: 'Wave', icon: '👋' },
-  { id: 'dance', name: 'Dance', icon: '🕺' },
-  { id: 'point', name: 'Point', icon: '👉' },
-  { id: 'jump', name: 'Cheer', icon: '🙌' },
-  { id: 'sit', name: 'Sit', icon: '🧘' },
-  { id: 'flex', name: 'Flex', icon: '💪' },
+  { id: 'wave', name: 'Wave', icon: '👋', particles: [1, 1, 1] },
+  { id: 'dance', name: 'Dance', icon: '🕺', particles: [1, 0.84, 0] },
+  { id: 'point', name: 'Point', icon: '👉', particles: [0.6, 0.8, 1] },
+  { id: 'jump', name: 'Cheer', icon: '🙌', particles: [1, 0.6, 0.2] },
+  { id: 'sit', name: 'Sit', icon: '🧘', particles: [0.5, 0.8, 0.5] },
+  { id: 'flex', name: 'Flex', icon: '💪', particles: [1, 0.4, 0.4] },
+  { id: 'moonwalk', name: 'Moonwalk', icon: '🌙', particles: [0.8, 0.8, 1] },
+  { id: 'spin', name: 'Spin', icon: '💫', particles: [1, 1, 0.5] },
+  { id: 'robot', name: 'Robot', icon: '🤖', particles: [0.5, 0.5, 0.5] },
+  { id: 'thriller', name: 'Thriller', icon: '🧟', particles: [0.8, 0.2, 0.2] },
+  { id: 'lean', name: 'Lean', icon: '🦩', particles: [1, 0.9, 0.7] },
+  { id: 'kick', name: 'Kick', icon: '🦶', particles: [0.9, 0.9, 0.9] },
 ];
 
 export class StoreSystem {
   constructor(game) {
     this.game = game;
     this.owned = new Set(Storage.get('pt.store.owned', []));
-    this.ownedEmotes = new Set(Storage.get('pt.store.emotes', ['wave', 'dance']));
+    this.ownedEmotes = new Set(Storage.get('pt.store.emotes', ['wave', 'dance', 'point', 'jump', 'moonwalk', 'spin']));
     this.currency = Storage.get('pt.store.coins', 250);
     this.selected = {
       shirt: Storage.get('pt.store.sel.shirt', 'shirt_verdant'),

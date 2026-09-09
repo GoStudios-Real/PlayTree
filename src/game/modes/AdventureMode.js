@@ -77,6 +77,10 @@ export class AdventureMode extends BaseMode {
       const y = g.world.getSurfaceHeight(s.x, s.z);
       g.entities.spawnNPC(s.type, s.x + 0.5, y + 1, s.z + 0.5);
     }
+    // Spawn MJ at the dance stage
+    const mjX = -10, mjZ = 10;
+    const mjY = g.world.getSurfaceHeight(mjX, mjZ);
+    g.entities.spawnMJ(mjX + 0.5, mjY + 1, mjZ + 0.5, { name: 'MJ' });
   }
 
   _placeSecretLocations() {

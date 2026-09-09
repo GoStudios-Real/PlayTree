@@ -95,6 +95,13 @@ export class Avatar {
   playEmote(emote) {
     this.emote = emote || null;
     this.emoteTime = 0;
+    // Spawn particles from emote definition
+    if (emote && this.group?.parent) {
+      const EMOTES_MAP = { wave: [1,1,1], dance: [1,0.84,0], point: [0.6,0.8,1], jump: [1,0.6,0.2], sit: [0.5,0.8,0.5], flex: [1,0.4,0.4], moonwalk: [0.8,0.8,1], spin: [1,1,0.5], robot: [0.5,0.5,0.5], thriller: [0.8,0.2,0.2], lean: [1,0.9,0.7], kick: [0.9,0.9,0.9] };
+      const col = EMOTES_MAP[emote] || [1,1,1];
+      const pos = this.group.position;
+      this.group.parent.parent?.particles?.spawn?.(pos.x, pos.y + 1.5, pos.z, { count: 12, color: col, speed: 3, life: 0.8 });
+    }
   }
 
   update(dt, moving, speedRatio) {
@@ -127,13 +134,63 @@ export class Avatar {
       p.armR.rotation.x = -2.2;
       p.legL.rotation.x = -0.3;
       p.legR.rotation.x = 0.3;
+    } else if (this.emote === 'moonwalk') {
+      // Moonwalk: alternating leg slides, arm swings
+      const s = Math.sin(t * 6);
+      p.legL.position.z = s * 0.12;
+      p.legR.position.z = -s * 0.12;
+      p.legL.rotation.x = s * 0.5;
+      p.legR.rotation.x = -s * 0.5;
+      p.armL.rotation.x = -s * 0.7;
+      p.armR.rotation.x = s * 0.7;
+    } else if (this.emote === 'spin') {
+      // Spin: arms out, rotate body
+      p.armL.position.x = -0.4;
+      p.armR.position.x = 0.4;
+      p.armL.rotation.z = -0.8;
+      p.armR.rotation.z = 0.8;
+      p.torso.rotation.y += dt * 10;
+    } else if (this.emote === 'robot') {
+      // Robot: stiff angular movements
+      const snap = Math.floor(t * 4) % 4;
+      p.armL.rotation.x = snap === 0 ? -1.2 : snap === 1 ? 0 : snap === 2 ? -0.6 : 0;
+      p.armR.rotation.x = snap === 0 ? 0 : snap === 1 ? -1.2 : snap === 2 ? 0 : -0.6;
+      p.head.rotation.y = (snap % 2) * 0.4 - 0.2;
+    } else if (this.emote === 'thriller') {
+      // Thriller: zombie arms, stiff walk
+      p.armL.rotation.x = -1.8;
+      p.armR.rotation.x = -1.8;
+      p.armL.position.z = Math.sin(t * 2) * 0.1;
+      p.armR.position.z = -Math.sin(t * 2) * 0.1;
+      p.legL.rotation.x = Math.sin(t * 3) * 0.4;
+      p.legR.rotation.x = -Math.sin(t * 3) * 0.4;
+    } else if (this.emote === 'lean') {
+      // Anti-gravity lean
+      p.torso.rotation.z = Math.sin(t * 2) * 0.2;
+      p.armL.rotation.x = Math.sin(t * 3) * 0.5;
+      p.armR.rotation.x = -Math.sin(t * 3) * 0.5;
+    } else if (this.emote === 'kick') {
+      // Alternating kicks
+      const s = Math.sin(t * 5);
+      p.legL.rotation.x = Math.max(0, s) * 1.4;
+      p.legR.rotation.x = Math.max(0, -s) * 1.4;
+      p.armL.rotation.x = -0.6;
+      p.armR.rotation.x = -0.6;
     }
     // reset base rotations after emote
     if (!this.emote) {
       p.torso.rotation.y = 0;
+      p.torso.rotation.z = 0;
       p.head.rotation.y = 0;
+      p.head.rotation.z = 0;
       p.armL.rotation.z = 0;
       p.armR.rotation.z = 0;
+      p.armL.position.x = -0.34;
+      p.armR.position.x = 0.34;
+      p.armL.position.z = 0;
+      p.armR.position.z = 0;
+      p.legL.position.z = 0;
+      p.legR.position.z = 0;
     }
   }
 

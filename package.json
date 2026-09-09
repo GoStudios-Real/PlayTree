@@ -4,11 +4,13 @@
   "description": "PlayTree - Chapter I: Season I. An original sandbox-adventure game platform.",
   "type": "module",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "start": "node server/server.mjs",
     "dev": "node server/server.mjs --watch",
     "test": "node tests/run-tests.mjs",
-    "check": "node scripts/check-syntax.mjs && node scripts/check-exports.mjs"
+    "check": "node scripts/check-syntax.mjs && node scripts/check-exports.mjs",
+    "dist": "electron-builder --win --x64 --publish never"
   },
   "engines": {
     "node": ">=18"
@@ -22,5 +24,35 @@
     "creative",
     "survival",
     "multiplayer"
-  ]
+  ],
+  "author": "RhysBoxGameStudios",
+  "build": {
+    "appId": "com.playtree.season1",
+    "productName": "PlayTree",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "vendor/**/*",
+      "server/**/*",
+      "docs/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": "portable"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1"
+  }
 }
