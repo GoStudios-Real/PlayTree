@@ -60,3 +60,6 @@ Q
 # PlayTree runtime
 .playtree/
 *.corrupt
+
+.git.bak/
+**/.git.bak/
