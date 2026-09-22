@@ -1,0 +1,1 @@
+Extra bundled file with a custom icon shortcut.

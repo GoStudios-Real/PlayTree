@@ -1,0 +1,79 @@
+DISCORD DEVELOPER PORTAL SETUP
+================================
+
+1. GO TO DISCORD DEVELOPER PORTAL
+   https://discord.com/developers/applications
+
+2. SELECT YOUR APP (Application ID: 1548510077055537184)
+
+3. UPLOAD ASSETS (Rich Presence)
+   Go to: Rich Presence → Art Assets
+   Upload these files from PlayTreeDiscord/assets/:
+   - playtree_large.png → name it "playtree_large"
+   - playtree_small.png → name it "playtree_small"
+   - playtree_banner.png → name it "playtree_banner"
+
+4. CONFIGURE OAUTH2
+   Go to: OAuth2
+   - Client ID: 1548510077055537184 (already set)
+   - Client Secret: (reset if needed, put in .env)
+   - Redirects: add https://localhost (for local dev)
+
+5. CREATE INVITE LINK
+   Go to: OAuth2 → URL Generator
+   Check these scopes:
+   - bot
+   - applications.commands
+   Bot Permissions:
+   - Send Messages
+   - Embed Links
+   - Use Slash Commands
+   - Read Message History
+   Copy the generated URL and open it in your browser
+
+6. SET BOT PERMISSIONS
+   Go to: Bot → Privileged Gateway Intents
+   Enable:
+   - MESSAGE CONTENT INTENT (for prefix commands)
+
+7. CONFIGURE ACTIVITY (Optional)
+   Go to: General Information
+   - Set Description: "PlayTree Game Collection by GoStudios"
+
+8. TEST
+   Run: python bot.py
+   Commands available instantly in Discord
+
+UPDATING BOT TOKEN
+==================
+If you need a new token:
+1. Go to Bot → Token → Reset Token
+2. Copy the new token
+3. Edit .env file: DISCORD_TOKEN=your_new_token_here
+
+ASSET GUIDELINES
+================
+Large Icon: 512x512 PNG, transparent background
+Small Icon: 96x96 PNG, transparent background
+Banner: 960x540 PNG, for Rich Presence
+
+The assets are already generated in PlayTreeDiscord/assets/
+- playtree_large.png (512x512)
+- playtree_small.png (96x96)
+- playtree_banner.png (960x540)
+
+COMMANDS REFERENCE
+==================
+/games          Show all 9 PlayTree games
+/play <game>    Game info with stats and rating
+/random         Random game picker
+/nowplaying     Detect running PlayTree games
+/stats [user]   Playtime, launches, rank
+/achievements   12 achievements with lock/unlock
+/leaderboard    Server playtime ranking
+/profile [user] Rich profile card
+/favorite       Set/clear favorite game
+/rate <1-5>     Rate a game
+/links          Download and social links
+/serverstats    Server-wide statistics
+/help           List all commands

@@ -1,0 +1,155 @@
+PLAYTREE — Microsoft Store Listing Content
+===========================================
+
+BASIC INFO
+----------
+Title: PLAYTREE
+Subtitle: Chapter 1 Season 1
+Publisher: PlayTree Corporation
+Developer: GoConsole Game Studios
+Category: Action & Adventure / Role Playing / Strategy
+Price: Free
+In-App Purchases: None (Free to Play)
+Platforms: Windows PC, Xbox One, Xbox Series X|S
+Languages: English
+Content Rating: E10+ (Everyone 10+) — Fantasy Violence
+Release Date: September 25, 2026
+Version: 1.0.0
+
+SHORT DESCRIPTION (max 150 chars)
+---------------------------------
+Explore a 9000x9000 world, battle Astro Toilets, build bases, ride mounts — free multiplayer fantasy adventure!
+
+LONG DESCRIPTION (max 4000 chars)
+----------------------------------
+PLAYTREE is a stylized multiplayer fantasy adventure by GoConsole Game Studios. Chapter 1 : Season 1 brings a massive free update to the PlayTree universe.
+
+EXPLORE A LIVING WORLD
+Traverse a vast 9000x9000 world across 16 unique regions. Experience dynamic day/night cycles and weather systems that change how you play. From dense forests to crystal caverns, storm peaks to the hollow throne — every corner holds secrets.
+
+MASTER COMBAT
+Choose from 6 classes — Guardian, Ranger, Mage, Mechanic, Beast Tamer, and more. Wield 12 unique weapons with combo systems, dodge rolling, and skill trees. Face off against the elite Astro Toilets — a hostile alien faction ranging from Troopers to the massive Mothership with warp drives, EMP blasts, and detaining claws.
+
+BUILD YOUR FORTRESS
+Construct bases with walls, roofs, turrets, workbenches, and more. Defend your home against nightly raids and expand as you grow stronger.
+
+RIDE & COMPANION
+Tame and ride 5 unique mounts — Forest Stag, Crystal Wolf, Shadow Raven, Sky Drake, and Ancient Beetle. Collect and evolve pets through a deep evolution system.
+
+PLAY TOGETHER
+Full multiplayer support via GoConsoleOS cross-play. Team up with friends, raid bosses, and compete on global leaderboards.
+
+PROGRESSION
+- Battle Pass with 100 tiers of rewards
+- 12 unique achievements
+- Daily rewards and login bonuses
+- Skill trees for every class
+- Enchanting and equipment systems
+- Fishing minigames
+- New Game Plus mode
+
+28 INTERACTIVE SYSTEMS
+Combat, crafting, quests, seasons, weather, base building, mounts, pets, fishing, enchanting, equipment, skill trees, battle pass, achievements, daily rewards, leaderboards, screenshots, tutorials, and more — all free.
+
+CHAPTER 1 : SEASON 1
+The next chapter begins. New content, new bosses, new rewards. Join millions of players in the free PlayTree experience.
+
+XBOX & PC
+Play anywhere — Windows PC and Xbox consoles. Full controller support, Xbox achievements, and touch controls on supported devices.
+
+KEYWORDS
+playtree, fantasy, adventure, multiplayer, sandbox, survival, open world, free to play, rpg, action, base building, mounts, pets, xbox, pc, goconsole, gostudios
+
+FEATURES (bullet list for store)
+--------------------------------
+- Vast 9000x9000 open world with 16 regions
+- 6 playable classes with unique abilities
+- 12 weapons with combo and skill systems
+- Elite Astro Toilet enemy faction with 7 unit types
+- Base building with turrets and defenses
+- 5 rideable mounts and pet evolution system
+- Full multiplayer via GoConsoleOS cross-play
+- Battle Pass with 100 seasonal tiers
+- 12 achievements and daily rewards
+- Dynamic weather and day/night cycles
+- Fishing, enchanting, crafting minigames
+- New Game Plus for endless replayability
+- Full controller and touch support
+- Free to play — no pay-to-win
+
+RECOMMENDED REQUIREMENTS
+-------------------------
+OS: Windows 10 1809 / Xbox One
+Processor: Intel i5-4460 / AMD FX-8350
+Memory: 8 GB RAM
+Graphics: GTX 960 / Radeon R9 280
+DirectX: Version 11
+Storage: 2 GB available space
+
+MINIMUM REQUIREMENTS
+---------------------
+OS: Windows 7 SP1 / Xbox One
+Processor: Intel i3-4130 / AMD FX-6300
+Memory: 4 GB RAM
+Graphics: GTX 750 / Radeon R7 260
+DirectX: Version 10
+Storage: 2 GB available space
+
+TRAILER
+-------
+File: Trailer/PLAYTREE_Trailer.mp4
+Duration: 30 seconds
+Resolution: 1920x1080
+Description: Official PLAYTREE Chapter 1 Season 1 trailer — world showcase, combat, features, and free download CTA.
+
+SCREENSHOTS (6 required minimum)
+---------------------------------
+StoreAssets/Screenshots/01_MainMenu.png     — Minecraft Beta style main menu
+StoreAssets/Screenshots/02_Combat.png       — Combat with Astro Toilet boss
+StoreAssets/Screenshots/03_OpenWorld.png    — Vast open world exploration
+StoreAssets/Screenshots/04_BaseBuilding.png — Base building system
+StoreAssets/Screenshots/05_Multiplayer.png  — Multiplayer lobby
+StoreAssets/Screenshots/06_BattlePass.png   — Battle pass progression
+
+ASSETS INVENTORY
+----------------
+Assets/StoreLogo.png              300x300   Store logo
+Assets/Square44x44Logo.png        44x44     Small logo
+Assets/SmallTile.png              71x71     Small tile
+Assets/Square71x71Logo.png        71x71     Small tile alt
+Assets/MediumTile.png             150x150   Medium tile
+Assets/Square150x150Logo.png      150x150   Medium tile alt
+Assets/WideTile.png               310x150   Wide tile
+Assets/Wide310x150Logo.png        310x150   Wide tile alt
+Assets/LargeTile.png              310x310   Large tile
+Assets/Square310x310Logo.png      310x310   Large tile alt
+Assets/SplashScreen.png           620x300   Splash screen
+Assets/SplashScreen620x300.png    620x300   Splash alt
+Assets/SplashScreen1240x600.png   1240x600  Splash hi-res
+
+StoreAssets/Hero_1920x1080.png              Store hero image
+StoreAssets/LogoKeyArt_1200x600.png          Store key art
+StoreAssets/StoreFeatureBanner_3840x1200.png Feature banner
+StoreAssets/Screenshots/*.png                6 screenshots
+StoreAssets/Trailer/PLAYTREE_Trailer.mp4     30s trailer
+
+SUBMISSION STEPS
+----------------
+1. Go to https://partner.microsoft.com/dashboard
+2. Sign in with Microsoft Partner account
+3. Click "New submission" → "Apps & games"
+4. Enter Package Identity Name: PlayTreeCorporation.PlayTree
+5. Enter Publisher: CN=PlayTree Corporation
+6. Upload Package.appxmanifest + Assets
+7. Upload StoreAssets to Store listing section:
+   - Hero image → Hero
+   - Screenshots → Screenshots (drag all 6)
+   - Trailer → Videos
+   - Logo → Logo
+8. Paste descriptions from this file
+9. Select categories, pricing (Free), ratings
+10. Submit for certification (usually 1-3 days)
+11. Once approved → appears in Microsoft Store on your PC!
+
+NOTE: Requires a Microsoft Partner Center account ($19 one-time fee for individual dev).
+      The package identity must match your Partner Center account publisher ID.

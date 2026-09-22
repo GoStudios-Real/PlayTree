@@ -1,0 +1,6 @@
+# GoConsole touch
+persist.vendor.touch.onscreen=true
+persist.vendor.keyboard.onscreen=true
+ro.com.android.dataline=true
+# BT
+bluetooth.device.class=0x0005C0

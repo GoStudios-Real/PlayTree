@@ -1,0 +1,51 @@
+{
+  "playtime": {},
+  "launches": {
+    "PLAYTREE DUNGEON": 1,
+    "PLAYTREE FOOTBALL": 4,
+    "PLAYTREE": 2
+  },
+  "favorites": [
+    "PLAYTREE DUNGEON",
+    "PLAYTREE FOOTBALL"
+  ],
+  "theme": "midnight",
+  "last_played": {
+    "PLAYTREE DUNGEON": 1789215224.4097633,
+    "PLAYTREE FOOTBALL": 1789791250.0977652,
+    "PLAYTREE": 1789791258.059168
+  },
+  "ratings": {
+    "PLAYTREE FOOTBALL": 4
+  },
+  "achievements": [
+    "first_launch",
+    "speedrunner"
+  ],
+  "notifications": [
+    {
+      "text": "Achievement: First Steps!",
+      "time": 1789258335.8849978,
+      "color": [
+        126,
+        211,
+        33
+      ]
+    },
+    {
+      "text": "Achievement: Speedrunner!",
+      "time": 1789791258.059168,
+      "color": [
+        255,
+        200,
+        50
+      ]
+    }
+  ],
+  "music_enabled": true,
+  "_launch_times": [
+    1789791245.6262226,
+    1789791250.0977652,
+    1789791258.059168
+  ]
+}

@@ -1,9 +1,62 @@
+# Remote repo rules
 node_modules/
+coverage/
+server/certs/
+*.local.json
+
+# Secrets & sessions
+.env
+gostudios_accounts.json
+gostudios_session.json
+rhystech_accounts.json
+rhystech_session.json
+*.session.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Build artifacts
+build/
 dist/
+*.spec
+*.pkg
+*.pyz
+*.toc
+*.xref-*.html
+
+# Binaries & packages
+*.exe
+*.msix
+*.appx
+*.appxbundle
+*.xvc
+*.zip
+*.msixbundle
+
+# Large media
+*.mp4
+*.mp3
+*.mkv
+*.avi
+*.mov
+
+# Trailer frame dumps
+**/Trailer/frames/
+
+# Logs / OS
 *.log
 .DS_Store
 Thumbs.db
-coverage/
-.env
-server/certs/
-*.local.json
+Desktop.ini
+*.lnk
+.vscode/
+.idea/
+Q
+
+# PlayTree runtime
+.playtree/
+*.corrupt
