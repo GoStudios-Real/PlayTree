@@ -7,7 +7,7 @@ class MainMenu:
         self.time = 0
         self.selected = 0
         self.hovered = -1
-        self.menu_items = ["Play","Settings","Marketplace"]
+        self.menu_items = ["Play","Settings","Marketplace","Games"]
         self.has_save = has_save
         self.font_big = pygame.font.Font(None, 90)
         self.font_mid = pygame.font.Font(None, 28)
@@ -38,6 +38,7 @@ class MainMenu:
         if idx==0: return "character_create" if not self.has_save else "continue"
         if idx==1: return "settings"
         if idx==2: return "marketplace"
+        if idx==3: return "games"
         if idx==100: return "signin"
         if idx==101: return "profile"
         if idx==102: return "signup"
@@ -54,7 +55,7 @@ class MainMenu:
             if event.key==pygame.K_ESCAPE: return "quit"
         elif event.type==pygame.MOUSEMOTION:
             self.hovered = self._get_item_at(event.pos)
-            if self.hovered>=0 and self.hovered<3: self.selected=self.hovered
+            if self.hovered>=0 and self.hovered<len(self.menu_items): self.selected=self.hovered
         elif event.type==pygame.MOUSEBUTTONDOWN and event.button==1:
             idx=self._get_item_at(event.pos)
             if idx>=0: return self._activate_item(idx)
@@ -150,9 +151,9 @@ class MainMenu:
         beta=pygame.font.Font(None,36).render("Beta!!!", True, (255,255,0))
         beta=pygame.transform.rotate(beta, -18)
         self.screen.blit(beta,(WIDTH//2 + 220, logo_y+30))
-        # Center buttons Play/Settings/Marketplace
+        # Center buttons Play/Settings/Marketplace/Games
         self._update_menu_rects()
-        labels=["Play","Settings","Marketplace"]
+        labels=list(self.menu_items)
         for i,lab in enumerate(labels):
             sel=(i==self.selected or i==self.hovered)
             self._draw_button(self.menu_rects[i], lab, sel)

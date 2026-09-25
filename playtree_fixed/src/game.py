@@ -46,6 +46,20 @@ from src.legend_features import PlayerCount, DoggoLegend, DancingBots, AdminAbus
 from src.npcs import NPC, DialogueBox, NPC_TYPES
 
 
+# Catalog shown by the main-menu GAMES button (mirrors the website games page).
+GAMES_CATALOG = [
+    {"id": "playtree", "title": "PlayTree", "plat": "Windows / Android / macOS / Linux", "zip": None, "web": True},
+    {"id": "dungeon", "title": "PlayTree Dungeon", "plat": "Desktop", "zip": "standalone/PlayTreeDungeon.zip"},
+    {"id": "puzzle", "title": "PlayTree Puzzle", "plat": "Desktop", "zip": "standalone/PlayTreePuzzle.zip"},
+    {"id": "racing", "title": "PlayTree Racing", "plat": "Desktop", "zip": "standalone/PlayTreeRacing.zip"},
+    {"id": "space", "title": "PlayTree Space", "plat": "Desktop", "zip": "standalone/PlayTreeSpace.zip"},
+    {"id": "towerdef", "title": "PlayTree Tower Defense", "plat": "Desktop", "zip": "standalone/PlayTreeTowerDef.zip"},
+    {"id": "underwater", "title": "PlayTree Underwater", "plat": "Desktop", "zip": "standalone/PlayTreeUnderwater.zip"},
+    {"id": "football", "title": "PlayTree Football", "plat": "Desktop", "zip": "standalone/PlayTreeFootBall.zip"},
+    {"id": "three-d", "title": "PlayTree 3D", "plat": "Desktop", "zip": "standalone/PlayTree3D.zip"},
+]
+
+
 class Game:
     def __init__(self, screen):
         self.screen = screen
@@ -100,6 +114,10 @@ class Game:
         self.shop_open = False
         self.marketplace_open = False
         self.profile_open = False
+        self.games_open = False
+        self.games_selected = 0
+        self.games_status = ""
+        self._games_rects = {}
         self.menu_buttons = []
         self.message = ""
         self.message_timer = 0
@@ -940,6 +958,40 @@ class Game:
                         except Exception as exc:
                             self.update_log.status_line = f"Could not open browser: {exc}"
                     continue
+                # GAMES panel modal (main menu) — swallows input until closed
+                if self.games_open:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            self.games_open = False
+                            self.audio.play("menu_select")
+                        elif event.key in (pygame.K_UP, pygame.K_w):
+                            self.games_selected = (self.games_selected - 1) % len(GAMES_CATALOG)
+                        elif event.key in (pygame.K_DOWN, pygame.K_s):
+                            self.games_selected = (self.games_selected + 1) % len(GAMES_CATALOG)
+                        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_g):
+                            grect = self._games_rects.get("GET")
+                            if grect:
+                                self._handle_games_click(grect.center)
+                        continue
+                    if event.type == pygame.MOUSEMOTION:
+                        for gi in range(len(GAMES_CATALOG)):
+                            gr = self._games_rects.get("row%d" % gi)
+                            if gr and gr.collidepoint(event.pos):
+                                self.games_selected = gi
+                                break
+                        continue
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        self._handle_games_click(event.pos)
+                        continue
+                    if event.type == pygame.JOYBUTTONDOWN:
+                        if event.button == 1:
+                            self.games_open = False
+                        else:
+                            grect = self._games_rects.get("GET")
+                            if grect:
+                                self._handle_games_click(grect.center)
+                        continue
+                    continue
                 result = self.main_menu.handle_event(event)
                 if result == "character_create":
                     self.state = GameState.CHARACTER_CREATE
@@ -977,6 +1029,11 @@ class Game:
                 elif result == "settings":
                     self.state = GameState.SETTINGS
                     self.settings_hover = -1
+                elif result == "games":
+                    self.games_open = True
+                    self.games_selected = 0
+                    self.games_status = "Select a game — GET downloads it free"
+                    self.audio.play("menu_select")
                 elif result == "signin":
                     self.state = GameState.LOGIN
                     self.account.state = "login"
@@ -2389,7 +2446,7 @@ class Game:
                 nr_f = pygame.font.Font(None, 20)
                 pulse = int(math.sin(self.time * 3) * 30 + 225)
                 nr_s = nr_f.render("Daily Reward Available! (F10)", True, (*GOLD[:3], pulse))
-                self.screen.blit(nr_s, (WIDTH // 2 - nr_s.get_width() // 2, HEIGHT - 274))
+                self.screen.blit(nr_s, (WIDTH // 2 - nr_s.get_width() // 2, HEIGHT - 200))
             # Menu messages (e.g. "No save yet") — clear spot above buttons, below logo
             if self.message_timer > 0:
                 alpha = int(255 * min(1, self.message_timer))
@@ -2405,6 +2462,8 @@ class Game:
                 self.leaderboards.draw(self.screen)
             if self.update_log_open:
                 self.update_log.draw(self.screen)
+            if self.games_open:
+                self._draw_games_panel()
 
         elif self.state == GameState.CHARACTER_CREATE:
             self._draw_character_create()
@@ -3775,6 +3834,84 @@ class Game:
         ctxt = pygame.font.Font(None, 18).render("Close", True, (30,30,30))
         self.screen.blit(ctxt, (close.centerx - ctxt.get_width()//2, close.centery - ctxt.get_height()//2))
         self._market_close_rect = close
+
+    def _draw_games_panel(self):
+        s = self.screen
+        panel = pygame.Rect((WIDTH - 760) // 2, 70, 760, 560)
+        dim = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim.fill((0, 0, 0, 150))
+        s.blit(dim, (0, 0))
+        pygame.draw.rect(s, (14, 19, 32), panel, border_radius=14)
+        pygame.draw.rect(s, (89, 196, 143), panel, 2, border_radius=14)
+        f32 = pygame.font.Font(None, 34)
+        f22 = pygame.font.Font(None, 22)
+        f20 = pygame.font.Font(None, 20)
+        title = f32.render("PLAYTREE GAMES", True, (89, 255, 157))
+        s.blit(title, (panel.centerx - title.get_width() // 2, panel.y + 14))
+        sub = f20.render("Rate, favourite and chat on the website — install games here", True, (143, 183, 160))
+        s.blit(sub, (panel.centerx - sub.get_width() // 2, panel.y + 52))
+        self._games_rects = {}
+        rows_y = panel.y + 86
+        for i, g in enumerate(GAMES_CATALOG):
+            r = pygame.Rect(panel.x + 24, rows_y + i * 38, panel.w - 48, 34)
+            sel = (i == self.games_selected)
+            pygame.draw.rect(s, (44, 110, 79) if sel else (30, 42, 66), r, border_radius=7)
+            pygame.draw.rect(s, (89, 255, 157) if sel else (60, 76, 100), r, 1, border_radius=7)
+            s.blit(f22.render(g["title"], True, (234, 255, 242)), (r.x + 12, r.y + 7))
+            plat = f20.render(g["plat"], True, (143, 183, 160))
+            s.blit(plat, (r.right - plat.get_width() - 12, r.y + 9))
+            self._games_rects["row%d" % i] = r
+        by = rows_y + len(GAMES_CATALOG) * 38 + 14
+        btns = [
+            ("GET", panel.x + 24, (255, 215, 90)),
+            ("WEBSITE", panel.x + 150, (89, 196, 143)),
+            ("CLOSE", panel.right - 130, (200, 90, 90)),
+        ]
+        for name, bx, col in btns:
+            rect = pygame.Rect(bx, by, 118, 40)
+            pygame.draw.rect(s, col, rect, border_radius=8)
+            txt = f22.render(name, True, (14, 19, 32))
+            s.blit(txt, (rect.centerx - txt.get_width() // 2, rect.centery - txt.get_height() // 2))
+            self._games_rects[name] = rect
+        if self.games_status:
+            st = f20.render(self.games_status, True, (255, 215, 90))
+            s.blit(st, (panel.centerx - st.get_width() // 2, by + 50))
+        hint = f20.render("Arrows/Enter or tap — ESC closes · GET downloads the game free", True, (120, 140, 160))
+        s.blit(hint, (panel.centerx - hint.get_width() // 2, by + 76))
+
+    def _handle_games_click(self, pos):
+        for i in range(len(GAMES_CATALOG)):
+            r = self._games_rects.get("row%d" % i)
+            if r and r.collidepoint(pos):
+                self.games_selected = i
+                self.games_status = GAMES_CATALOG[i]["title"] + " selected"
+                self.audio.play("menu_hover")
+                return True
+        g = GAMES_CATALOG[self.games_selected]
+        if self._games_rects.get("GET") and self._games_rects["GET"].collidepoint(pos):
+            try:
+                import webbrowser
+                url = "https://raw.githubusercontent.com/GoStudios-Real/PlayTree/master/" + (g["zip"] or "standalone/PLAYTREE.exe")
+                webbrowser.open(url)
+                self.games_status = "Downloading " + g["title"] + " ..."
+                self.audio.play("menu_select")
+            except Exception as exc:
+                self.games_status = "Could not open browser: %s" % exc
+            return True
+        if self._games_rects.get("WEBSITE") and self._games_rects["WEBSITE"].collidepoint(pos):
+            try:
+                import webbrowser
+                webbrowser.open("https://github.com/GoStudios-Real/PlayTree")
+                self.games_status = "Opened the PlayTree Games page"
+                self.audio.play("menu_select")
+            except Exception as exc:
+                self.games_status = "Could not open browser: %s" % exc
+            return True
+        if self._games_rects.get("CLOSE") and self._games_rects["CLOSE"].collidepoint(pos):
+            self.games_open = False
+            self.audio.play("menu_select")
+            return True
+        return False
 
     def _draw_round_intro(self):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
