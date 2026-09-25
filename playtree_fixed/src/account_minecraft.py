@@ -151,13 +151,14 @@ class GoStudiosAccount:
         overlay=pygame.Surface((W,H),pygame.SRCALPHA)
         overlay.fill((0,0,0,40))
         screen.blit(overlay,(0,0))
-        # lang top left like screenshot
-        lang_bg=pygame.Surface((130,18),pygame.SRCALPHA)
+        # lang top left like screenshot (bg sized to text so nothing overlaps)
+        lang_txt=small_font.render(self.lang, True, (255,255,255))
+        lang_bg=pygame.Surface((lang_txt.get_width()+30,18),pygame.SRCALPHA)
         lang_bg.fill((0,0,0,120))
         screen.blit(lang_bg,(6,4))
-        lang_txt=small_font.render(self.lang, True, (255,255,255))
         screen.blit(lang_txt,(10,6))
-        pygame.draw.polygon(screen,(255,255,255),[(124,10),(134,10),(129,15)])
+        ax=10+lang_txt.get_width()+8
+        pygame.draw.polygon(screen,(255,255,255),[(ax,10),(ax+10,10),(ax+5,15)])
         # PLAYTREE logo top center like MINECRAFT stone
         logo_y=54
         for dx,dy in [(3,3),(-1,1)]:

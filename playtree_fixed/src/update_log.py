@@ -5,6 +5,21 @@ from config import *
 
 UPDATE_LOG = [
     {
+        "version": "1.1.0",
+        "date": "25/09/2026",
+        "title": "PLAYTREE v1.1.0 — Legend Update",
+        "changes": [
+            "Live player count panel — real players + 100,000,000 bot players",
+            "Doggo Legend companion with its own legend screen",
+            "Dancing bots on the main menu",
+            "Admin Abuse console — press L for cheats and chaos buttons",
+            "Single-instance lock — no more duplicate game copies",
+            "Crash errors throttled to %TEMP%\\playtree_error.log",
+            "Shop hover crash fix and PlayerClass ordering fix",
+            "Sign In / Sign Up buttons now respond correctly on all screens",
+        ],
+    },
+    {
         "version": "1.0.0",
         "date": "14/06/2026",
         "title": "PLAYTREE v1.0.0 — Initial Release",
@@ -54,6 +69,9 @@ class UpdateLog:
         self.scroll_y = 0
         self.max_scroll = 0
         self.selected_entry = 0
+        self.status_line = ""
+        self.check_btn_rect = None
+        self.github_btn_rect = None
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -65,6 +83,11 @@ class UpdateLog:
                 self.scroll_y = min(self.max_scroll, self.scroll_y + 40)
         elif event.type == pygame.MOUSEWHEEL:
             self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - event.y * 30))
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.check_btn_rect and self.check_btn_rect.collidepoint(event.pos):
+                return "check_updates"
+            if self.github_btn_rect and self.github_btn_rect.collidepoint(event.pos):
+                return "open_github"
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.button == 1:
                 return "close"
@@ -146,3 +169,22 @@ class UpdateLog:
 
         hint = pygame.font.Font(None, 16).render("UP/DOWN to scroll  |  ESC/B to close", True, (80, 100, 80))
         screen.blit(hint, (px + 20, py + ph - 20))
+
+        # Buttons — GitHub update check + open repo (both work in the packaged EXE)
+        btn_f = pygame.font.Font(None, 18)
+        self.check_btn_rect = pygame.Rect(px + pw - 480, py + ph - 26, 240, 22)
+        self.github_btn_rect = pygame.Rect(px + pw - 230, py + ph - 26, 210, 22)
+        for rect, label in ((self.check_btn_rect, "CHECK FOR UPDATES"),
+                            (self.github_btn_rect, "OPEN GITHUB")):
+            mx, my = pygame.mouse.get_pos()
+            hover = rect.collidepoint(mx, my)
+            pygame.draw.rect(screen, (50, 90, 50) if hover else (30, 55, 30), rect, border_radius=5)
+            pygame.draw.rect(screen, GREEN_GLOW, rect, 1, border_radius=5)
+            ls = btn_f.render(label, True, (210, 255, 210))
+            screen.blit(ls, ls.get_rect(center=rect.center))
+
+        # Status line from the last update check
+        if self.status_line:
+            st_f = pygame.font.Font(None, 18)
+            st_s = st_f.render(self.status_line, True, GOLD)
+            screen.blit(st_s, st_s.get_rect(centerx=px + pw // 2, y=py + ph - 56))

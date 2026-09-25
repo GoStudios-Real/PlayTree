@@ -2,6 +2,9 @@ import pygame
 import math
 import random
 import sys
+import time
+import os
+import threading
 from config import *
 from src.player import Player
 from src.world import World
@@ -13,7 +16,7 @@ from src.particles import ParticleSystem, GlowEffect, StarField
 from src.menu import MainMenu
 from src.audio import ProceduralAudio
 from src.storm import StormSystem
-from src.save_system import save_game, load_game, has_save, save_settings, load_settings
+from src.save_system import save_game, load_game, has_save, save_settings, load_settings, get_go_live_ts
 from src.boss import Boss, BossHealthBar, BOSS_TYPES
 from src.mounts import Mount
 from src.base_building import BaseBuilder, BUILDING_TYPES
@@ -40,6 +43,7 @@ from src.screenshot import ScreenshotSystem
 from src.new_game_plus import NewGamePlus
 from src.pet_system import PetManager
 from src.legend_features import PlayerCount, DoggoLegend, DancingBots, AdminAbuse
+from src.npcs import NPC, DialogueBox, NPC_TYPES
 
 
 class Game:
@@ -128,6 +132,19 @@ class Game:
         self.admin_abuse = AdminAbuse()
         self.legend_open = False
         self.show_player_count = True
+
+        # Go-live countdown (first launch + GO_LIVE_DAYS) — LIVE unlocks NPCs + Admin Abuse
+        self.go_live_ts = get_go_live_ts(GO_LIVE_DAYS, FORCE_LIVE)
+        self.is_live = bool(FORCE_LIVE) or time.time() >= self.go_live_ts
+        self.go_live_synced = False
+        if not FORCE_LIVE and not os.environ.get("PLAYTREE_OFFLINE"):
+            threading.Thread(target=self._fetch_go_live, daemon=True).start()
+        self._live_announced = False
+        self.npcs = []
+        self.dialogue_box = DialogueBox()
+        self._admin_fx_prev = set()
+        self._admin_timers = {"rain": 0.0, "mega": 0.0}
+        self._touch_esc_rect = pygame.Rect(WIDTH - 76, 208, 66, 30)
 
         # Mount system
         self.mount = None
@@ -405,6 +422,9 @@ class Game:
         self.is_night = False
         self.pet_manager = PetManager()
         self._spawn_initial_entities()
+        self.npcs = []
+        if self.is_live:
+            self._spawn_live_npcs()
         self.state = GameState.ROUND_INTRO
         self.round_intro_timer = 0
         self.inventory_open = False
@@ -419,6 +439,14 @@ class Game:
         self.leaderboards.update_score("round", self.player.name, self.current_round)
 
     def _load_game(self):
+        try:
+            return self._load_game_impl()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def _load_game_impl(self):
         data = load_game()
         if not data:
             self.show_message("No save data found!", 2)
@@ -474,7 +502,7 @@ class Game:
         self.base_builder = BaseBuilder()
         for b_data in data.get("buildings", []):
             from src.base_building import Building
-            b = Building(b_data["x"], b_data["y"], b_data["build_type"])
+            b = Building(b_data.get("x", 0), b_data.get("y", 0), b_data.get("build_type", "wall"))
             b.hp = b_data.get("hp", b.hp)
             b.owner = b_data.get("owner", "")
             self.base_builder.buildings.append(b)
@@ -503,7 +531,7 @@ class Game:
         self.skill_tree = SkillTree(pc2, self.audio)
         for sid, lvl in data.get("skill_levels", {}).items():
             if sid in self.skill_tree.skills:
-                self.skill_tree.skills[sid]["level"] = min(lvl, self.skill_tree.skills[sid]["max_level"])
+                self.skill_tree.skills[sid]["level"] = min(lvl, self.skill_tree.skills[sid].get("max", 1))
         self.skill_tree.skill_points = data.get("skill_points", 3)
         # Achievements
         self.achievements = AchievementSystem(self.audio)
@@ -529,6 +557,9 @@ class Game:
         if lb_data:
             self.leaderboards.data = lb_data
         self.pet_manager = PetManager()
+        self.npcs = []
+        if self.is_live:
+            self._spawn_live_npcs()
         self.show_message("Welcome back, " + self.player.name + "!", 3)
         return True
 
@@ -550,7 +581,226 @@ class Game:
         self.message = text
         self.message_timer = duration
 
+    def _any_overlay_open(self):
+        return any([
+            self.inventory_open, self.crafting_open, self.shop_open, self.locker_open,
+            self.profile_open, self.marketplace_open, self.lobby_open, self.build_open,
+            self.battle_pass_open, self.achievements_open, self.daily_rewards_open,
+            self.leaderboards_open, self.update_log_open,
+            getattr(self.screenshot_sys, 'share_menu_open', False),
+        ])
+
+    def go_live_str(self):
+        if self.is_live:
+            return "LIVE"
+        remaining = max(0, self.go_live_ts - time.time())
+        d = int(remaining // 86400)
+        h = int(remaining % 86400 // 3600)
+        m = int(remaining % 3600 // 60)
+        s = int(remaining % 60)
+        return f"{d}d {h:02d}:{m:02d}:{s:02d}"
+
+    def _fetch_go_live(self):
+        """Pull the go-live instant from the PlayTree GitHub page so the
+        in-game countdown always matches the countdown on the website."""
+        import urllib.request
+        urls = [
+            "https://raw.githubusercontent.com/GoStudios-Real/PlayTree/master/index.html",
+            "https://gostudios-real.github.io/PlayTree/",
+        ]
+        for url in urls:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": f"PLAYTREE/{VERSION}"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    html = resp.read().decode("utf-8", "ignore")
+                ts = self._parse_go_live(html)
+                if ts:
+                    self._adopt_go_live(ts)
+                    return
+            except Exception:
+                continue
+
+    @staticmethod
+    def _parse_go_live(html):
+        import re
+        import datetime
+        m = re.search(r'name="playtree-go-live"\s+content="([^"]+)"', html)
+        if not m:
+            m = re.search(r'GO_LIVE_ISO\s*=\s*"([^"]+)"', html)
+        if not m:
+            return None
+        try:
+            return datetime.datetime.fromisoformat(m.group(1).replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return None
+
+    def _adopt_go_live(self, ts):
+        if not ts or ts <= 0:
+            return
+        if self.is_live:
+            return
+        self.go_live_ts = float(ts)
+        self.go_live_synced = True
+        try:
+            cfg = load_settings() or {}
+            if cfg.get("go_live_ts") != float(ts):
+                cfg["go_live_ts"] = float(ts)
+                cfg["go_live_source"] = "github_page"
+                save_settings(cfg)
+        except Exception:
+            pass
+
+    def _check_for_updates(self):
+        """Query GitHub for the latest commit — works in the packaged EXE (stdlib only)."""
+        ul = self.update_log
+        ul.status_line = "Checking GitHub..."
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.github.com/repos/GoStudios-Real/PlayTree/commits?per_page=1",
+                headers={"User-Agent": f"PLAYTREE/{VERSION}"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+            c = data[0]
+            msg = (c.get("commit", {}).get("message", "") or "").splitlines()[0][:60]
+            date = (c.get("commit", {}).get("committer", {}).get("date", "") or "")[:10]
+            sha = (c.get("sha", "") or "")[:7]
+            ul.status_line = f"GitHub latest: {sha} — {msg} ({date})"
+            self.audio.play("collect")
+        except Exception:
+            ul.status_line = f"Could not reach GitHub — running v{VERSION} (offline?)"
+            self.audio.play("menu_hover")
+
+    def _spawn_live_npcs(self):
+        if self.npcs:
+            return
+        if self.player:
+            cx, cy = self.player.x, self.player.y
+        else:
+            cx, cy = WORLD_W // 2, WORLD_H // 2
+        types = list(NPC_TYPES.keys())
+        for i, npc_type in enumerate(types):
+            angle = (i / max(1, len(types))) * math.tau
+            dist = 130 + (i % 3) * 70
+            nx = max(60, min(WORLD_W - 60, cx + math.cos(angle) * dist))
+            ny = max(60, min(WORLD_H - 60, cy + math.sin(angle) * dist))
+            self.npcs.append(NPC(nx, ny, npc_type))
+
+    def _go_live_event(self):
+        if self.is_live:
+            return
+        self.is_live = True
+        self._live_announced = True
+        self.show_message("PLAYTREE IS LIVE!!!", 6)
+        self.admin_abuse.log.append("[LIVE] PlayTree went LIVE — ADMIN ABUSE AUTHORIZED")
+        self.admin_abuse.chat.append(("WILLOW", "WE'RE LIVE!!! ADMIN ABUSE GO!"))
+        self.admin_abuse.chat.append(("RHYS", "Villagers are here. Time to cause problems."))
+        self.audio.play("menu_confirm")
+        self._spawn_live_npcs()
+        # celebration
+        try:
+            self.admin_abuse.trigger("rain")
+            self.admin_abuse.trigger("disco")
+        except Exception:
+            pass
+        if self.state == GameState.MAIN_MENU or self.state == GameState.PLAYING:
+            self.admin_abuse.open = True
+
+    def _apply_admin_abuse_effects(self, dt):
+        fx = getattr(self.admin_abuse, "effects", {})
+        active = set(fx.keys())
+        prev = self._admin_fx_prev
+        player = self.player
+
+        # on-activate / on-expire handlers
+        if "willow" in active and "willow" not in prev and player:
+            self._willow_orig_dmg = player.stats.get("damage", 10)
+            player.stats["damage"] = self._willow_orig_dmg * 3
+        if "willow" not in active and "willow" in prev and player and hasattr(self, "_willow_orig_dmg"):
+            player.stats["damage"] = self._willow_orig_dmg
+        if "size" in active and "size" not in prev:
+            for e in self.enemies:
+                if not hasattr(e, "_orig_size"):
+                    e._orig_size = e.size
+                e.size = e._orig_size * 2
+        if "size" not in active and "size" in prev:
+            for e in self.enemies:
+                if hasattr(e, "_orig_size"):
+                    e.size = e._orig_size
+        if "tpp" in active and "tpp" not in prev and player:
+            for e in self.enemies[:8]:
+                ang = random.uniform(0, math.tau)
+                e.x = player.x + math.cos(ang) * 160
+                e.y = player.y + math.sin(ang) * 160
+            self.show_message("TPP ALL! Enemies recalled!", 2)
+        if "raid" in active and "raid" not in prev and player:
+            for _ in range(6):
+                ang = random.uniform(0, math.tau)
+                ex = max(50, min(WORLD_W - 50, player.x + math.cos(ang) * 500))
+                ey = max(50, min(WORLD_H - 50, player.y + math.sin(ang) * 500))
+                self.enemies.append(Enemy(ex, ey, random.randint(0, 3)))
+            self.show_message("ASTRO RAID! Hostiles inbound!", 3)
+        if "spawn" in active and "spawn" not in prev and player:
+            for i in range(4):
+                npc_type = random.choice(list(NPC_TYPES.keys()))
+                ang = random.uniform(0, math.tau)
+                self.npcs.append(NPC(player.x + math.cos(ang) * 140,
+                                     player.y + math.sin(ang) * 140, npc_type))
+            self.show_message("SPAWN BOTS! More villagers!", 3)
+        if "boss" in active and "boss" not in prev:
+            self._spawn_round_boss("root_titan")
+        if "kick" in active and "kick" not in prev and self.enemies:
+            victim = random.choice(self.enemies)
+            self.enemies.remove(victim)
+            self.show_message("KICK BOT! One less enemy.", 2)
+        if "god" in active and player:
+            player.invincible = max(getattr(player, "invincible", 0), 0.3)
+        if "freeze" in active and "freeze" not in prev:
+            self.show_message("FREEZE ALL! Time stopped.", 2)
+
+        # continuous effects
+        if "rain" in active and player:
+            self._admin_timers["rain"] += dt
+            if self._admin_timers["rain"] >= 0.15:
+                self._admin_timers["rain"] = 0.0
+                ang = random.uniform(0, math.tau)
+                dist = random.randint(60, 360)
+                self._drop_gold(max(50, player.x + math.cos(ang) * dist),
+                                max(50, player.y + math.sin(ang) * dist))
+        if "spin" in active and player:
+            player.facing += dt * 12
+        if "dance" in active and player:
+            player.facing += dt * 7
+            self.camera_y += math.sin(self.time * 14) * 2
+        if "mega" in active and player:
+            self._admin_timers["mega"] += dt
+            if self._admin_timers["mega"] >= 0.7:
+                self._admin_timers["mega"] = 0.0
+                nx = max(50, min(WORLD_W - 50, player.x + math.cos(player.facing) * 320))
+                ny = max(50, min(WORLD_H - 50, player.y + math.sin(player.facing) * 320))
+                player.particles.burst(player.x, player.y, GREEN_GLOW, 14, 4, 30, 4)
+                player.x, player.y = nx, ny
+                self.camera_shake = 3
+
+        self._admin_fx_prev = active
+
     def _convert_finger_to_mouse(self, events):
+        # SDL sometimes also emulates mouse events from touch — collect them first so
+        # we don't synthesize a duplicate click (which would double-toggle buttons).
+        native = {"down": [], "up": [], "motion": []}
+        for event in events:
+            if event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                native["down"].append(event.pos)
+            elif event.type == pygame.MOUSEBUTTONUP and getattr(event, "button", 0) == 1:
+                native["up"].append(event.pos)
+            elif event.type == pygame.MOUSEMOTION:
+                native["motion"].append(event.pos)
+
+        def _has_native(kind, fx, fy, tol=4):
+            return any(abs(px - fx) <= tol and abs(py - fy) <= tol
+                       for px, py in native[kind])
+
         converted = []
         for event in events:
             if event.type == pygame.FINGERDOWN:
@@ -559,27 +809,27 @@ class Game:
                 h = surf.get_height() if surf else HEIGHT
                 mx = int(event.x * w)
                 my = int(event.y * h)
-                synth = pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(mx, my))
                 converted.append(event)
-                converted.append(synth)
+                if not _has_native("down", mx, my):
+                    converted.append(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(mx, my)))
             elif event.type == pygame.FINGERUP:
                 surf = pygame.display.get_surface()
                 w = surf.get_width() if surf else WIDTH
                 h = surf.get_height() if surf else HEIGHT
                 mx = int(event.x * w)
                 my = int(event.y * h)
-                synth = pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(mx, my))
                 converted.append(event)
-                converted.append(synth)
+                if not _has_native("up", mx, my):
+                    converted.append(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(mx, my)))
             elif event.type == pygame.FINGERMOTION:
                 surf = pygame.display.get_surface()
                 w = surf.get_width() if surf else WIDTH
                 h = surf.get_height() if surf else HEIGHT
                 mx = int(event.x * w)
                 my = int(event.y * h)
-                synth = pygame.event.Event(pygame.MOUSEMOTION, pos=(mx, my), rel=(0, 0), buttons=(1, 0, 0))
                 converted.append(event)
-                converted.append(synth)
+                if not _has_native("motion", mx, my):
+                    converted.append(pygame.event.Event(pygame.MOUSEMOTION, pos=(mx, my), rel=(0, 0), buttons=(1, 0, 0)))
             else:
                 converted.append(event)
         return converted
@@ -591,18 +841,29 @@ class Game:
                 self.running = False
                 return
 
-            # Global hotkeys — Legend (L) and Admin Abuse (F9)
+            # Global hotkeys — Legend (L) and Admin Abuse (Shift+A / F9)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_F9:
+                    if not self.is_live:
+                        self.show_message(f"Admin Abuse unlocks when PlayTree goes LIVE — {self.go_live_str()}", 3)
+                        continue
                     self.admin_abuse.open = not self.admin_abuse.open
                     self.legend_open = False
                     continue
-                if event.key == pygame.K_L and not self.admin_abuse.open:
+                if event.key == pygame.K_a and (getattr(event, "mod", 0) & pygame.KMOD_SHIFT):
+                    if self.state in (GameState.MAIN_MENU, GameState.PLAYING, GameState.PAUSED) and not self.typing_name:
+                        if not self.is_live:
+                            self.show_message(f"Admin Abuse unlocks when PlayTree goes LIVE — {self.go_live_str()}", 3)
+                            continue
+                        self.admin_abuse.open = not self.admin_abuse.open
+                        self.legend_open = False
+                        continue
+                if event.key == pygame.K_l and not self.admin_abuse.open:
                     if self.state in (GameState.MAIN_MENU, GameState.PLAYING, GameState.PAUSED):
                         self.legend_open = not self.legend_open
                         continue
                 if self.legend_open:
-                    if event.key in (pygame.K_ESCAPE, pygame.K_L):
+                    if event.key in (pygame.K_ESCAPE, pygame.K_l):
                         self.legend_open = False
                         continue
                 if self.admin_abuse.open:
@@ -646,6 +907,13 @@ class Game:
             if self.legend_open:
                 continue
 
+            # Touch-friendly ESC button shown while gameplay overlays are open
+            if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                    and self.state == GameState.PLAYING and self._any_overlay_open()
+                    and self._touch_esc_rect.collidepoint(event.pos)):
+                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, unicode="", mod=0))
+                continue
+
             if self.state == GameState.LOGIN:
                 result = self.account.handle_event(event)
                 if result == "logged_in":
@@ -661,6 +929,16 @@ class Game:
                     ul_result = self.update_log.handle_event(event)
                     if ul_result == "close":
                         self.update_log_open = False
+                    elif ul_result == "check_updates":
+                        self._check_for_updates()
+                    elif ul_result == "open_github":
+                        try:
+                            import webbrowser
+                            webbrowser.open("https://github.com/GoStudios-Real/PlayTree")
+                            self.update_log.status_line = "Opened the PlayTree GitHub page in your browser"
+                            self.audio.play("menu_select")
+                        except Exception as exc:
+                            self.update_log.status_line = f"Could not open browser: {exc}"
                     continue
                 result = self.main_menu.handle_event(event)
                 if result == "character_create":
@@ -685,11 +963,17 @@ class Game:
                     else:
                         self.show_message("No save to open store!", 2)
                 elif result == "marketplace":
-                    self.marketplace_open = True
-                    self.state = GameState.PLAYING
+                    if self.save_exists and self._load_game():
+                        self.marketplace_open = True
+                        self.state = GameState.PLAYING
+                    else:
+                        self.show_message("No save yet — press Play first!", 2)
                 elif result == "profile":
-                    self.profile_open = True
-                    self.state = GameState.PLAYING
+                    if self.save_exists and self._load_game():
+                        self.profile_open = True
+                        self.state = GameState.PLAYING
+                    else:
+                        self.show_message("No save yet — press Play first!", 2)
                 elif result == "settings":
                     self.state = GameState.SETTINGS
                     self.settings_hover = -1
@@ -767,6 +1051,11 @@ class Game:
                         if hasattr(self, '_market_close_rect') and self._market_close_rect.collidepoint(event.pos):
                             self.marketplace_open = False
                             continue
+                        for vname, vrect in getattr(self, '_market_view_rects', []):
+                            if vrect.collidepoint(event.pos):
+                                self.show_message(f"{vname} — free! 0 Minecoins", 2)
+                                self.audio.play("menu_select")
+                                continue
                     continue
                 if self.daily_rewards_open:
                     dr_result = self.daily_rewards.handle_event(event)
@@ -801,6 +1090,18 @@ class Game:
                     self.state = GameState.SETTINGS
                     self.settings_hover = -1
                     self.audio.play("menu_select")
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    rects = getattr(self, "_pause_rects", {})
+                    if rects.get("resume", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        self.state = GameState.PLAYING
+                        self.audio.play("menu_confirm")
+                    elif rects.get("settings", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        self.state = GameState.SETTINGS
+                        self.settings_hover = -1
+                        self.audio.play("menu_select")
+                    elif rects.get("menu", pygame.Rect(0, 0, 0, 0)).collidepoint(event.pos):
+                        self.state = GameState.MAIN_MENU
+                        self.audio.play("menu_select")
                 elif event.type == pygame.JOYBUTTONDOWN:
                     if event.button == 9:  # Start
                         self.state = GameState.PLAYING
@@ -914,6 +1215,8 @@ class Game:
                 self.state = GameState.MAIN_MENU
 
     def _handle_gameplay(self, event):
+        if event.type == pygame.MOUSEMOTION and self.shop_open:
+            self._handle_shop_hover(event.pos)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_e:
                 self._try_interact()
@@ -933,8 +1236,18 @@ class Game:
             elif event.key == pygame.K_ESCAPE:
                 if hasattr(self, 'tutorial') and self.tutorial and not self.tutorial.done and self.tutorial.visible:
                     self.tutorial.skip()
+                elif self.dialogue_box.active:
+                    self.dialogue_box.advance()
                 elif self.achievements_open:
                     self.achievements_open = False
+                elif self.shop_open:
+                    self.shop_open = False
+                    self.shop_hovered = -1
+                elif self.battle_pass_open:
+                    self.battle_pass_open = False
+                elif self.build_open:
+                    self.build_open = False
+                    self.base_builder.build_mode = False
                 elif self.inventory_open or self.crafting_open or self.locker_open or self.lobby_open:
                     self.inventory_open = False
                     self.crafting_open = False
@@ -1039,10 +1352,14 @@ class Game:
                 self.mount.sprint(False)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.build_open:
+            if self.dialogue_box.active:
+                self.dialogue_box.advance()
+            elif self.build_open:
                 self.base_builder.handle_click(event.pos[0], event.pos[1],
                                                int(self.camera_x), int(self.camera_y), self.player)
                 self.audio.play("place")
+            elif self.shop_open:
+                self._handle_shop_click(event.pos)
             elif self.locker_open:
                 self._handle_locker_click(event.pos)
             elif self.lobby_open:
@@ -1092,6 +1409,21 @@ class Game:
                 self.locker_open = not was4
 
     def _try_interact(self):
+        # Dialogue first — advance or dismiss
+        if self.dialogue_box.active:
+            self.dialogue_box.advance()
+            return
+
+        # Go-live villagers (spawned when the countdown hits zero)
+        if self.player:
+            for npc in self.npcs:
+                if npc.is_in_range(self.player.x, self.player.y):
+                    line = npc.get_dialogue()
+                    if line:
+                        self.dialogue_box.start(npc.name, line)
+                        self.audio.play("menu_hover")
+                        return
+
         # Check bosses
         for boss in self.bosses:
             dx = boss.x - self.player.x
@@ -1345,6 +1677,19 @@ class Game:
                 return
             self.show_message("You don't have that weapon!", 1.5)
 
+    def _touch_cycle_weapon(self):
+        """WPN touch button — cycle through owned weapons (keyboard 1-8 order)."""
+        owned_ids = (self.player.inventory.get("weapons", []) +
+                     self.player.inventory.get("items", []))
+        owned = [w for w in WEAPONS if w in owned_ids]
+        if not owned:
+            self.show_message("No weapons owned yet!", 1.5)
+            self.audio.play("menu_hover")
+            return
+        cur = self.player.weapon_id
+        idx = owned.index(cur) if cur in owned else -1
+        self._switch_weapon(owned[(idx + 1) % len(owned)])
+
     def _check_projectile_hits(self):
         for proj in self.player.projectiles[:]:
             hit = False
@@ -1461,6 +1806,9 @@ class Game:
     def update(self, dt):
         self.dt = dt
         self._check_controller_connection()
+        # Go-live countdown — flip everything LIVE the moment it reaches zero
+        if not self.is_live and time.time() >= self.go_live_ts:
+            self._go_live_event()
         # on-screen keyboard for touch — show when typing name / login
         try:
             typing = bool(getattr(self, 'typing_name', False) and self.state in [GameState.CHARACTER_CREATE, GameState.LOGIN])
@@ -1526,6 +1874,7 @@ class Game:
         # Always tick these (player count + admin abuse live everywhere)
         self.player_count.update(dt)
         self.admin_abuse.update(dt)
+        self._apply_admin_abuse_effects(dt)
 
         if self.state == GameState.ROUND_INTRO:
             self.round_intro_timer += dt
@@ -1618,6 +1967,11 @@ class Game:
                     self.state = GameState.PAUSED
                     self.audio.play("menu_select")
 
+            # Go-live villagers + dialogue typing
+            for npc in self.npcs:
+                npc.update(dt)
+            self.dialogue_box.update(dt)
+
             # Touch controls input
             if self.touch_controls.enabled:
                 tx, ty = self.touch_controls.get_movement()
@@ -1658,6 +2012,22 @@ class Game:
                 if self.touch_controls.menu_btn.just_pressed():
                     self.state = GameState.PAUSED
                     self.audio.play("menu_select")
+                # Extended touchscreen buttons — reuse the exact keyboard actions
+                touch_keys = [
+                    (self.touch_controls.storm_btn, pygame.K_t),
+                    (self.touch_controls.tame_btn, pygame.K_TAB),
+                    (self.touch_controls.shop_btn, pygame.K_s),
+                    (self.touch_controls.build_btn, pygame.K_v),
+                    (self.touch_controls.battlepass_btn, pygame.K_F1),
+                    (self.touch_controls.lobby_btn, pygame.K_p),
+                    (self.touch_controls.achv_btn, pygame.K_u),
+                ]
+                for tbtn, tkey in touch_keys:
+                    if tbtn.just_pressed():
+                        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=tkey, mod=0, unicode=""))
+                        self.audio.play("tab_switch")
+                if self.touch_controls.weapon_btn.just_pressed():
+                    self._touch_cycle_weapon()
 
             # Mount speed boost
             if self.mount and self.mount.mounted:
@@ -1980,6 +2350,8 @@ class Game:
             font = pygame.font.Font(None, 32)
             small_font = pygame.font.Font(None, 22)
             self.account.draw(self.screen, font, small_font)
+            # Touchscreen: on-screen keyboard while typing login/register fields
+            self.touch_controls.draw_keyboard_only(self.screen)
 
         elif self.state == GameState.MAIN_MENU:
             self.main_menu.draw()
@@ -1997,11 +2369,36 @@ class Game:
                     name_txt = f"GoStudios: {user_data['name']}"
                     name_s = tiny_f.render(name_txt, True, (100, 160, 100))
                     self.screen.blit(name_s, (WIDTH - name_s.get_width() - 20, 15))
+            # Go-live countdown / LIVE badge — top-right, under the account name
+            cl_f = pygame.font.Font(None, 24)
+            if self.is_live:
+                cl_txt = "● PLAYTREE IS LIVE!"
+                cl_col = (80, 255, 120)
+            else:
+                cl_txt = f"GOES LIVE IN: {self.go_live_str()}"
+                cl_col = GOLD
+            cl_s = cl_f.render(cl_txt, True, cl_col)
+            cl_y = 38 if self.account.current_user else 14
+            cl_bg = pygame.Surface((cl_s.get_width() + 16, cl_s.get_height() + 8), pygame.SRCALPHA)
+            pulse = int(math.sin(self.time * 4) * 40 + 150) if self.is_live else 150
+            cl_bg.fill((10, 15, 10, pulse))
+            pygame.draw.rect(cl_bg, (*cl_col[:3], 160), cl_bg.get_rect(), 1, border_radius=6)
+            self.screen.blit(cl_bg, (WIDTH - cl_bg.get_width() - 14, cl_y - 4))
+            self.screen.blit(cl_s, (WIDTH - cl_s.get_width() - 22, cl_y))
             if self.daily_rewards.can_claim() and not self.daily_rewards_open and not self.leaderboards_open:
                 nr_f = pygame.font.Font(None, 20)
                 pulse = int(math.sin(self.time * 3) * 30 + 225)
                 nr_s = nr_f.render("Daily Reward Available! (F10)", True, (*GOLD[:3], pulse))
-                self.screen.blit(nr_s, (WIDTH // 2 - nr_s.get_width() // 2, HEIGHT - 150))
+                self.screen.blit(nr_s, (WIDTH // 2 - nr_s.get_width() // 2, HEIGHT - 274))
+            # Menu messages (e.g. "No save yet") — clear spot above buttons, below logo
+            if self.message_timer > 0:
+                alpha = int(255 * min(1, self.message_timer))
+                msg_font = pygame.font.Font(None, 28)
+                msg_surf = msg_font.render(self.message, True, (*GREEN_GLOW[:3], alpha))
+                bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 10), pygame.SRCALPHA)
+                bg.fill((10, 15, 10, min(180, alpha)))
+                self.screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, 235))
+                self.screen.blit(msg_surf, (WIDTH // 2 - msg_surf.get_width() // 2, 240))
             if self.daily_rewards_open:
                 self.daily_rewards.draw(self.screen)
             if self.leaderboards_open:
@@ -2011,6 +2408,8 @@ class Game:
 
         elif self.state == GameState.CHARACTER_CREATE:
             self._draw_character_create()
+            # Touchscreen: on-screen keyboard while typing the character name
+            self.touch_controls.draw_keyboard_only(self.screen)
 
         elif self.state == GameState.ROUND_INTRO:
             self._draw_game_world()
@@ -2096,11 +2495,65 @@ class Game:
             self.admin_abuse.draw(self.screen, font32, font22)
             # Handle mouse clicks on abuse buttons
             # (handled in handle_events via mouse, but draw buttons here)
-        # Hint bar
+        # Hint bar — bottom-center on menu (avoids version text), right in gameplay
         if self.state in (GameState.MAIN_MENU, GameState.PLAYING) and not self.legend_open and not self.admin_abuse.open:
             hf = pygame.font.Font(None, 16)
-            hint = hf.render("[L] Legend  [F9] Admin Abuse", True, (70, 100, 70))
-            self.screen.blit(hint, (WIDTH - hint.get_width() - 12, HEIGHT - 14))
+            hint = hf.render("[L] Legend  [Shift+A] Admin Abuse", True, (70, 100, 70))
+            if self.state == GameState.MAIN_MENU:
+                hx, hy = WIDTH // 2 - hint.get_width() // 2, HEIGHT - 14
+            else:
+                hx, hy = WIDTH - hint.get_width() - 12, HEIGHT - 14
+            self.screen.blit(hint, (hx, hy))
+
+        # Toast for messages triggered while an overlay covers the world (shop/marketplace/etc.)
+        if self.message_timer > 0 and self._any_overlay_open():
+            alpha = int(255 * min(1, self.message_timer))
+            msg_font = pygame.font.Font(None, 26)
+            msg_surf = msg_font.render(self.message, True, (*GREEN_GLOW[:3], alpha))
+            msg_rect = msg_surf.get_rect(center=(WIDTH // 2, 22))
+            bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 10), pygame.SRCALPHA)
+            bg.fill((10, 15, 10, min(200, alpha)))
+            self.screen.blit(bg, (msg_rect.x - 10, msg_rect.y - 5))
+            self.screen.blit(msg_surf, msg_rect)
+
+        # Touch-friendly ESC button while gameplay overlays are open
+        if self.state == GameState.PLAYING and self._any_overlay_open():
+            r = self._touch_esc_rect
+            pygame.draw.rect(self.screen, (50, 18, 18), r, border_radius=6)
+            pygame.draw.rect(self.screen, (255, 90, 90), r, 2, border_radius=6)
+            esc_s = pygame.font.Font(None, 20).render("ESC X", True, (255, 170, 170))
+            self.screen.blit(esc_s, esc_s.get_rect(center=r.center))
+
+        # Admin abuse screen effects (rainbow / disco / glitch)
+        fx = getattr(self.admin_abuse, "effects", {})
+        if "rainbow" in fx:
+            for band in range(6):
+                col = pygame.Color(0)
+                col.hsva = ((self.time * 80 + band * 60) % 360, 100, 100, 100)
+                seg = pygame.Surface((WIDTH, HEIGHT // 6 + 1), pygame.SRCALPHA)
+                seg.fill((col.r, col.g, col.b, 36))
+                self.screen.blit(seg, (0, band * (HEIGHT // 6)))
+        if "disco" in fx:
+            disco = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            for i in range(4):
+                col = pygame.Color(0)
+                col.hsva = ((self.time * 130 + i * 90) % 360, 100, 100, 100)
+                pygame.draw.circle(disco, (col.r, col.g, col.b, 30),
+                                   (int((WIDTH / 4) * (i + 0.5)), HEIGHT // 2), 260)
+            self.screen.blit(disco, (0, 0))
+        if "glitch" in fx:
+            for _ in range(6):
+                gy = random.randint(0, HEIGHT - 14)
+                gh = random.randint(4, 14)
+                gdx = random.randint(-25, 25)
+                band = self.screen.subsurface(pygame.Rect(0, gy, WIDTH, gh)).copy()
+                self.screen.blit(band, (gdx, gy))
+            for _ in range(3):
+                gy = random.randint(0, HEIGHT - 6)
+                gc = random.choice([(255, 0, 80), (0, 255, 180), (120, 0, 255)])
+                gs = pygame.Surface((WIDTH, 4), pygame.SRCALPHA)
+                gs.fill((*gc, 60))
+                self.screen.blit(gs, (0, gy))
 
     def _draw_character_create(self):
         GlowEffect.gradient_rect(self.screen, (5, 5, 30), (20, 30, 50), (0, 0, WIDTH, HEIGHT))
@@ -2173,39 +2626,31 @@ class Game:
 
     def _handle_settings_click(self, pos):
         mx, my = pos
-        settings_list = list(self.settings.keys())[:-1]
-        for i, key in enumerate(settings_list):
-            sy = 160 + i * 45
-            if 100 <= mx <= 300 and sy <= my <= sy + 35:
+        # must match _draw_settings geometry: iy = 130 + i*45, rows 35px tall
+        settings_items = ["music_volume", "sfx_volume", "fullscreen", "show_fps",
+                          "screen_shake", "show_damage_numbers", "auto_collect"]
+        for i, key in enumerate(settings_items):
+            iy = 130 + i * 45
+            if not (90 <= mx <= 1190 and iy <= my <= iy + 35):
+                continue
+            if key in ("music_volume", "sfx_volume"):
+                if 340 <= mx <= 680:
+                    self.settings[key] = max(0, min(1, (mx - 340) / 340))
+                    if key == "music_volume":
+                        self.audio.set_music_volume(self.settings[key])
+                    else:
+                        self.audio.set_sfx_volume(self.settings[key])
+            else:
+                self.settings[key] = not self.settings[key]
+                self.audio.play("menu_select")
                 if key == "fullscreen":
-                    self.settings["fullscreen"] = not self.settings["fullscreen"]
-                    self.audio.play("menu_select")
                     if self.settings["fullscreen"]:
                         pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
                     else:
                         pygame.display.set_mode((WIDTH, HEIGHT))  # FIX: keep render_surface as Game.screen
-                elif key == "show_fps":
-                    self.settings["show_fps"] = not self.settings["show_fps"]
-                    self.audio.play("menu_select")
-                elif key == "screen_shake":
-                    self.settings["screen_shake"] = not self.settings["screen_shake"]
-                    self.audio.play("menu_select")
-                elif key == "show_damage_numbers":
-                    self.settings["show_damage_numbers"] = not self.settings["show_damage_numbers"]
-                    self.audio.play("menu_select")
-                elif key == "auto_collect":
-                    self.settings["auto_collect"] = not self.settings["auto_collect"]
-                    self.audio.play("menu_select")
-            if 340 <= mx <= 680 and sy <= my <= sy + 20:
-                if key == "music_volume":
-                    self.settings["music_volume"] = max(0, min(1, (mx - 340) / 340))
-                    self.audio.set_music_volume(self.settings["music_volume"])
-                elif key == "sfx_volume":
-                    self.settings["sfx_volume"] = max(0, min(1, (mx - 340) / 340))
-                    self.audio.set_sfx_volume(self.settings["sfx_volume"])
         save_settings(self.settings)
 
-        # Sign Out button
+        # Sign Out button (matches draw: sx+sw-160, sy+sh-45)
         so_x, so_y = 80 + (WIDTH - 160) - 160, 60 + (HEIGHT - 120) - 45
         if self.account.current_user and so_x <= mx <= so_x + 140 and so_y <= my <= so_y + 30:
             self.account.logout()
@@ -2213,27 +2658,27 @@ class Game:
 
     def _handle_settings_hover(self, pos):
         self.settings_hover = -1
-        settings_list = list(self.settings.keys())[:-1]
-        for i, key in enumerate(settings_list):
-            sy = 160 + i * 45
-            if 100 <= pos[0] <= 680 and sy <= pos[1] <= sy + 35:
+        settings_items = ["music_volume", "sfx_volume", "fullscreen", "show_fps",
+                          "screen_shake", "show_damage_numbers", "auto_collect"]
+        for i, key in enumerate(settings_items):
+            iy = 130 + i * 45
+            if 90 <= pos[0] <= 1190 and iy <= pos[1] <= iy + 35:
                 self.settings_hover = i
+                break
         # Sign Out hover
         if self.account.current_user:
-            so_x, so_y = WIDTH - 160 - 80 - 160, 720 - 60 - 45
-            so_x = 80 + (WIDTH - 160) - 160
-            so_y = 60 + (HEIGHT - 120) - 45
+            so_x, so_y = 80 + (WIDTH - 160) - 160, 60 + (HEIGHT - 120) - 45
             if so_x <= pos[0] <= so_x + 140 and so_y <= pos[1] <= so_y + 30:
                 self.settings_hover = 999
 
     def _handle_shop_click(self, pos):
         mx, my = pos
         items_list = list(SHOP_ITEMS.keys())
-        start_y = 130
+        start_y = 100  # matches _draw_shop: sy(40) + 60
         for i, item_name in enumerate(items_list):
             iy = start_y + i * 55
-            buy_x = 750
-            if buy_x <= mx <= buy_x + 100 and iy <= my <= iy + 40:
+            # BUY button matches draw: sx(60)+sw(1160)-120 = 1100, iy+4, 100x38
+            if 1100 <= mx <= 1200 and iy + 4 <= my <= iy + 42:
                 item = SHOP_ITEMS[item_name]
                 gold = self.player.inventory.get("resources", {}).get("Gold Leaves", 0)
                 if gold >= item["price"]:
@@ -2264,11 +2709,12 @@ class Game:
     def _handle_shop_hover(self, pos):
         self.shop_hovered = -1
         items_list = list(SHOP_ITEMS.keys())
-        start_y = 130
+        start_y = 100  # matches draw
         for i, item_name in enumerate(items_list):
             iy = start_y + i * 55
-            if 60 <= pos[0] <= 870 and iy <= pos[1] <= iy + 45:
+            if 70 <= pos[0] <= 1210 and iy <= pos[1] <= iy + 48:
                 self.shop_hovered = i
+                break
 
     def _draw_game_world(self):
         if not self.world or not self.player:
@@ -2347,6 +2793,16 @@ class Game:
         # Draw bosses
         for boss in self.bosses:
             boss.draw(self.screen, int(self.camera_x), int(self.camera_y))
+
+        # Go-live villagers (spawned when the countdown hits zero)
+        for npc in self.npcs:
+            npc.draw(self.screen, int(self.camera_x), int(self.camera_y), self.time)
+        if not self.dialogue_box.active:
+            for npc in self.npcs:
+                if npc.is_in_range(self.player.x, self.player.y):
+                    npc.draw_interaction(self.screen, self.player.x, self.player.y,
+                                         int(self.camera_x), int(self.camera_y))
+                    break
 
         # Draw mount (when not mounted by player)
         if self.mount and not self.mount.mounted:
@@ -2501,8 +2957,11 @@ class Game:
                     warning = wf.render(f"BOSS: {boss.name} nearby!", True, (255, 80, 80))
                     self.screen.blit(warning, (WIDTH // 2 - warning.get_width() // 2, 50))
 
-        # Message
-        if self.message_timer > 0:
+        # NPC dialogue box (top of the world, below HUD toasts)
+        self.dialogue_box.draw(self.screen)
+
+        # Message (skip when an overlay is open — toast drawn in global section instead)
+        if self.message_timer > 0 and not self._any_overlay_open():
             alpha = int(255 * min(1, self.message_timer))
             msg_font = pygame.font.Font(None, 28)
             msg_surf = msg_font.render(self.message, True, (*GREEN_GLOW[:3], alpha))
@@ -2939,6 +3398,22 @@ class Game:
             ps3 = pf3.render("F5 to save  |  Game auto-saves every 60s", True, (100, 140, 100))
         self.screen.blit(ps3, (WIDTH // 2 - ps3.get_width() // 2, HEIGHT // 2 + 35))
 
+        # Touch/mouse-friendly pause buttons
+        btn_w, btn_h = 260, 40
+        cx = WIDTH // 2 - btn_w // 2
+        self._pause_rects = {
+            "resume": pygame.Rect(cx, HEIGHT // 2 + 70, btn_w, btn_h),
+            "settings": pygame.Rect(cx, HEIGHT // 2 + 120, btn_w, btn_h),
+            "menu": pygame.Rect(cx, HEIGHT // 2 + 170, btn_w, btn_h),
+        }
+        bf = pygame.font.Font(None, 26)
+        for key_name, label in (("resume", "Resume"), ("settings", "Settings"), ("menu", "Main Menu")):
+            r = self._pause_rects[key_name]
+            pygame.draw.rect(self.screen, (30, 45, 30), r, border_radius=8)
+            pygame.draw.rect(self.screen, GREEN_GLOW, r, 2, border_radius=8)
+            ls = bf.render(label, True, (220, 255, 220))
+            self.screen.blit(ls, ls.get_rect(center=r.center))
+
     def _draw_game_over(self):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
@@ -3270,6 +3745,7 @@ class Game:
             ("Starter Kit", "Tools + Gold", (180,120,60)),
             ("Beta Access", "Chapter 0", (200,80,80)),
         ]
+        self._market_view_rects = []
         for i, (name, desc, col) in enumerate(items):
             x = bx+20 + (i%3)*285
             y = by+70 + (i//3)*190
@@ -3291,6 +3767,7 @@ class Game:
             pygame.draw.rect(self.screen, (0,0,0), btn, 1)
             btxt = pygame.font.Font(None, 14).render("View", True, (20,30,20))
             self.screen.blit(btxt, (btn.centerx - btxt.get_width()//2, btn.centery - btxt.get_height()//2))
+            self._market_view_rects.append((name, btn))
         # Close
         close = pygame.Rect(bx+bw//2 - 100, by+bh-40, 200, 32)
         pygame.draw.rect(self.screen, (200,200,200), close)

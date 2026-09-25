@@ -101,31 +101,38 @@ class GoStudiosAccount:
         if event.type==pygame.MOUSEBUTTONDOWN and event.button==1:
             mx,my=event.pos
             W,H=pygame.display.get_surface().get_size()
-            cx=W//2; bw=380; bx=cx-bw//2; by=150
-            # fields
+            # geometry must match draw() exactly: bw=420, by=120
+            cx=W//2; bw=420; bx=cx-bw//2; by=120
             if self.state=="login":
                 # email field
-                if pygame.Rect(bx+20,by+70, bw-40, 28).collidepoint(mx,my): self.active_field="email"; return True
-                if pygame.Rect(bx+20,by+120, bw-40, 28).collidepoint(mx,my): self.active_field="password"; return True
+                if pygame.Rect(bx+20,by+38, bw-40, 26).collidepoint(mx,my): self.active_field="email"; return True
+                # password field
+                if pygame.Rect(bx+20,by+98, bw-40, 26).collidepoint(mx,my): self.active_field="password"; return True
                 # keep logged checkbox
-                if pygame.Rect(bx+20,by+158, 14,14).collidepoint(mx,my): self.keep_logged=not self.keep_logged; return True
-                # forgot
-                if pygame.Rect(bx+220,by+160, 80,14).collidepoint(mx,my): return True
+                if pygame.Rect(bx+20,by+138, 12,12).collidepoint(mx,my): self.keep_logged=not self.keep_logged; return True
+                # forgot password link
+                if pygame.Rect(bx+bw-145,by+134, 140,20).collidepoint(mx,my): return True
                 # LOG IN button
-                if pygame.Rect(bx+20,by+185, bw-40, 36).collidepoint(mx,my):
+                if pygame.Rect(bx+20,by+168, bw-40, 34).collidepoint(mx,my):
                     if self.login(self.input_email,self.input_password): return "logged_in"
                     return True
                 # Sign up link
-                if pygame.Rect(cx-50,by+235,100,14).collidepoint(mx,my): self.state="register"; self.active_field="name"; return True
+                if pygame.Rect(cx-140,by+214, 280,26).collidepoint(mx,my):
+                    self.state="register"; self.active_field="name"
+                    self.input_name=""; self.input_password=""; self.input_confirm=""
+                    self.error_msg=""; return True
             else:
-                if pygame.Rect(bx+20,by+60, bw-40, 24).collidepoint(mx,my): self.active_field="name"; return True
-                if pygame.Rect(bx+20,by+110, bw-40, 24).collidepoint(mx,my): self.active_field="email"; return True
-                if pygame.Rect(bx+20,by+160, bw-40, 24).collidepoint(mx,my): self.active_field="password"; return True
-                if pygame.Rect(bx+20,by+210, bw-40, 24).collidepoint(mx,my): self.active_field="confirm"; return True
-                if pygame.Rect(bx+20,by+250, bw-40, 32).collidepoint(mx,my):
+                if pygame.Rect(bx+20,by+38, bw-40, 26).collidepoint(mx,my): self.active_field="name"; return True
+                if pygame.Rect(bx+20,by+88, bw-40, 26).collidepoint(mx,my): self.active_field="email"; return True
+                if pygame.Rect(bx+20,by+138, bw-40, 26).collidepoint(mx,my): self.active_field="password"; return True
+                if pygame.Rect(bx+20,by+188, bw-40, 26).collidepoint(mx,my): self.active_field="confirm"; return True
+                # Create Account button
+                if pygame.Rect(bx+20,by+230, bw-40, 32).collidepoint(mx,my):
                     if self.register(self.input_name,self.input_email,self.input_password,self.input_confirm): return "logged_in"
                     return True
-                if pygame.Rect(cx-60,by+295,120,14).collidepoint(mx,my): self.state="login"; return True
+                # Back to sign in link
+                if pygame.Rect(cx-160,by+272, 320,26).collidepoint(mx,my):
+                    self.state="login"; self.active_field="email"; self.error_msg=""; return True
         return False
 
     def _draw_world(self, screen, t=0):
@@ -151,13 +158,14 @@ class GoStudiosAccount:
         overlay=pygame.Surface((W,H),pygame.SRCALPHA)
         overlay.fill((0,0,0,40))
         screen.blit(overlay,(0,0))
-        # lang top left like screenshot
-        lang_bg=pygame.Surface((130,18),pygame.SRCALPHA)
+        # lang top left like screenshot (bg sized to text so nothing overlaps)
+        lang_txt=small_font.render(self.lang, True, (255,255,255))
+        lang_bg=pygame.Surface((lang_txt.get_width()+30,18),pygame.SRCALPHA)
         lang_bg.fill((0,0,0,120))
         screen.blit(lang_bg,(6,4))
-        lang_txt=small_font.render(self.lang, True, (255,255,255))
         screen.blit(lang_txt,(10,6))
-        pygame.draw.polygon(screen,(255,255,255),[(124,10),(134,10),(129,15)])
+        ax=10+lang_txt.get_width()+8
+        pygame.draw.polygon(screen,(255,255,255),[(ax,10),(ax+10,10),(ax+5,15)])
         # PLAYTREE logo top center like MINECRAFT stone
         logo_y=54
         for dx,dy in [(3,3),(-1,1)]:

@@ -264,14 +264,17 @@ class DancingBots:
 
     def __init__(self, count=12):
         self.bots = []
-        # Spread bots evenly across width without stacking
+        # Spread bots across width, keeping clear of Profile/Steve zone on the right
         margin = 50
-        usable = WIDTH - margin * 2
+        right_gap = 160
+        left = margin
+        right = WIDTH - right_gap
+        usable = right - left
         for i in range(count):
             self.bots.append({
                 "name": self.NAMES[i % len(self.NAMES)],
                 "color": self.COLORS[i % len(self.COLORS)],
-                "x": margin + int(i * usable / max(1, count - 1)),
+                "x": left + int(i * usable / max(1, count - 1)),
                 "phase": random.uniform(0, math.pi * 2),
                 "speed": random.uniform(2.5, 4.5),
                 "dance": random.randint(0, 2),

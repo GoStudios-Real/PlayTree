@@ -219,3 +219,33 @@ def load_settings():
             return json.load(f)
     except Exception:
         return None
+
+
+def get_go_live_ts(days=7, force=False):
+    """Go-live timestamp.
+
+    Canonical source: config.GO_LIVE_EPOCH (26/09/2026 1:33 PM Perth) — works
+    fully offline and matches the website. Falls back to first launch + `days`
+    if no canonical value is configured. force=True returns 0 (already live).
+    """
+    if force:
+        return 0.0
+    try:
+        from config import GO_LIVE_EPOCH
+    except Exception:
+        GO_LIVE_EPOCH = 0
+    cfg = load_settings() or {}
+    if GO_LIVE_EPOCH:
+        ts = float(GO_LIVE_EPOCH)
+        if cfg.get("go_live_ts") != ts or cfg.get("go_live_source") != "canonical":
+            cfg["go_live_ts"] = ts
+            cfg["go_live_source"] = "canonical"
+            save_settings(cfg)
+        return ts
+    ts = cfg.get("go_live_ts")
+    if not isinstance(ts, (int, float)) or ts <= 0:
+        import time as _time
+        ts = _time.time() + float(days) * 86400.0
+        cfg["go_live_ts"] = ts
+        save_settings(cfg)
+    return float(ts)

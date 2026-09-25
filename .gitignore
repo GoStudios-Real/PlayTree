@@ -63,3 +63,7 @@ Q
 
 .git.bak/
 **/.git.bak/
+
+!standalone/*.exe
+!standalone/*.zip
+!playtree_fixed/PLAYTREE.spec

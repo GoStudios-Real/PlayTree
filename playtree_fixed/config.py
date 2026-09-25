@@ -273,6 +273,12 @@ FPS = 60
 GOLD = (255, 215, 0)
 GRAY = (100, 100, 100)
 GREEN_GLOW = (100, 255, 150)
+# Go-live countdown: NPCs + Admin Abuse unlock when it reaches zero
+# Canonical instant: 26/09/2026 1:33 PM Perth (AWST, UTC+8) — same as the
+# website countdown; also used as the offline fallback (no network needed).
+GO_LIVE_DAYS = 7
+GO_LIVE_EPOCH = 1790400780.0  # 2026-09-26T13:33:00+08:00
+FORCE_LIVE = False  # True = skip countdown, everything already LIVE (testing)
 
 HATS = [
     'none',
@@ -658,7 +664,7 @@ TILE_SIZE = 48
 TITLE = 'PLAYTREE'
 UNARMED = {'name': 'Fists', 'type': 'sword', 'damage': 5, 'speed': 0.3, 'range': 30,
            'color': (200, 180, 160), 'trail_color': (255, 255, 255), 'desc': 'Bare knuckles'}
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 WEAPONS = {
     'sword_iron': {
         'name': 'Iron Sword', 'type': 'sword', 'damage': 12, 'speed': 0.25, 'range': 40, 'color': (

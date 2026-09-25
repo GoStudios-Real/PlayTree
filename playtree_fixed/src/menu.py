@@ -14,6 +14,7 @@ class MainMenu:
         self.font_small = pygame.font.Font(None, 18)
         self.menu_rects = []
         self.signin_rect = pygame.Rect(40, HEIGHT-80, 100, 32)
+        self.signup_rect = pygame.Rect(150, HEIGHT-80, 100, 32)
         self.profile_rect = pygame.Rect(WIDTH-120, HEIGHT-80, 100, 32)
         self.audio = None
 
@@ -30,6 +31,7 @@ class MainMenu:
             if r.collidepoint(pos): return i
         if self.signin_rect.collidepoint(pos): return 100
         if self.profile_rect.collidepoint(pos): return 101
+        if self.signup_rect.collidepoint(pos): return 102
         return -1
 
     def _activate_item(self, idx):
@@ -38,6 +40,7 @@ class MainMenu:
         if idx==2: return "marketplace"
         if idx==100: return "signin"
         if idx==101: return "profile"
+        if idx==102: return "signup"
         return None
 
     def update(self, dt):
@@ -124,8 +127,8 @@ class MainMenu:
     def draw(self):
         self._draw_world()
         # Top version text like beta ...
-        top = pygame.font.Font(None,14).render("beta 1.0.0 GoStudios, Windows 10 UWP Build, GoConsole GoStudios", True, (255,255,255))
-        self.screen.blit(top,(WIDTH//2 - top.get_width()//2, 6))
+        top = pygame.font.Font(None,14).render(f"beta {VERSION} GoStudios, Windows 10 UWP Build, GoConsole GoStudios", True, (255,255,255))
+        self.screen.blit(top,(10, 6))
         # Logo PLAYTREE stone cracked
         logo_y=90
         # shadow
@@ -153,10 +156,11 @@ class MainMenu:
         for i,lab in enumerate(labels):
             sel=(i==self.selected or i==self.hovered)
             self._draw_button(self.menu_rects[i], lab, sel)
-        # Bottom left Sign In
-        self._draw_button(self.signin_rect, "Sign In")
+        # Bottom left Sign In / Sign Up
+        self._draw_button(self.signin_rect, "Sign In", self.hovered==100)
+        self._draw_button(self.signup_rect, "Sign Up", self.hovered==102)
         # Bottom right Profile with Steve-like PlayTree character
-        self._draw_button(self.profile_rect, "Profile")
+        self._draw_button(self.profile_rect, "Profile", self.hovered==101)
         # Steve character
         cx=self.profile_rect.centerx
         cy=self.profile_rect.y - 90
@@ -179,5 +183,5 @@ class MainMenu:
         # Bottom copyright
         copyr=pygame.font.Font(None,14).render("\u00a9PlayTree Corporation", True, (255,255,255))
         self.screen.blit(copyr,(10, HEIGHT-18))
-        ver=pygame.font.Font(None,14).render("v1.0.0", True, (255,255,255))
+        ver=pygame.font.Font(None,14).render(f"v{VERSION}", True, (255,255,255))
         self.screen.blit(ver,(WIDTH - ver.get_width()-10, HEIGHT-18))

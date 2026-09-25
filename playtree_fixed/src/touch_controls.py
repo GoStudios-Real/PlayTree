@@ -285,9 +285,44 @@ class TouchControls:
         mount_y = margin + 70 + spacing
         self.mount_btn = TouchButton(mount_x, mount_y, btn_r * 0.7, "MNT", (150, 200, 255))
 
+        storm_x = screen_w - margin - 50
+        storm_y = screen_h - margin - 230
+        self.storm_btn = TouchButton(storm_x, storm_y, btn_r * 0.85, "STRM", (200, 120, 255))
+
+        tame_x = screen_w - margin - 50 - spacing
+        tame_y = screen_h - margin - 230
+        self.tame_btn = TouchButton(tame_x, tame_y, btn_r * 0.75, "TAME", (120, 255, 140))
+
+        weapon_x = screen_w - margin - 50 - spacing * 2
+        weapon_y = screen_h - margin - 200
+        self.weapon_btn = TouchButton(weapon_x, weapon_y, btn_r * 0.75, "WPN", (255, 170, 60))
+
+        shop_x = margin + 70
+        shop_y = margin + 70 + spacing * 2
+        self.shop_btn = TouchButton(shop_x, shop_y, btn_r * 0.75, "SHP", (255, 200, 80))
+
+        build_x = margin + 70 + spacing
+        build_y = margin + 70 + spacing * 2
+        self.build_btn = TouchButton(build_x, build_y, btn_r * 0.75, "BLD", (140, 160, 220))
+
+        bp_x = margin + 70
+        bp_y = margin + 70 + spacing * 3
+        self.battlepass_btn = TouchButton(bp_x, bp_y, btn_r * 0.75, "BP", (255, 120, 200))
+
+        lobby_x = margin + 70 + spacing
+        lobby_y = margin + 70 + spacing * 3
+        self.lobby_btn = TouchButton(lobby_x, lobby_y, btn_r * 0.75, "LOB", (100, 200, 255))
+
+        achv_x = margin + 70
+        achv_y = margin + 70 + spacing * 4
+        self.achv_btn = TouchButton(achv_x, achv_y, btn_r * 0.75, "ACH", (255, 230, 120))
+
         self.all_buttons = [self.attack_btn, self.dodge_btn, self.special_btn,
                             self.interact_btn, self.potion_btn, self.inventory_btn,
-                            self.craft_btn, self.mount_btn]
+                            self.craft_btn, self.mount_btn, self.storm_btn,
+                            self.tame_btn, self.weapon_btn, self.shop_btn,
+                            self.build_btn, self.battlepass_btn, self.lobby_btn,
+                            self.achv_btn]
 
         self.menu_btn = TouchButton(screen_w // 2, margin + 30, btn_r * 0.7, "|||", (200, 200, 200))
 
@@ -328,6 +363,11 @@ class TouchControls:
         self.menu_btn.draw(surface)
         for btn in self.all_buttons:
             btn.draw(surface)
+
+    def draw_keyboard_only(self, surface):
+        """On-screen keyboard for menus (login / character name) — no gameplay buttons."""
+        if self.enabled and self.keyboard.visible:
+            self.keyboard.draw(surface)
 
     def get_movement(self):
         return self.joystick.dx, self.joystick.dy
