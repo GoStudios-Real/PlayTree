@@ -143,8 +143,8 @@ class ExpandedEnemy:
                 self.state = "charging"
                 self.charge_timer = 2.0
             elif dist < self.attack_range and self.attack_cooldown <= 0:
+                # cooldown is set by the game loop when the hit lands
                 self.state = "attacking"
-                self.attack_cooldown = 1.5
             elif self.behavior != "burrow":
                 self.state = "chasing"
         else:

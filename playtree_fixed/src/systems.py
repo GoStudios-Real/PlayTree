@@ -144,8 +144,8 @@ class CombatSystem:
         dy = player.y - enemy.y
         dist = math.sqrt(dx * dx + dy * dy)
         if dist < enemy.attack_range + player.size and enemy.attack_cooldown <= 0:
-            player.take_damage(enemy.attack)
-            return True
+            enemy.attack_cooldown = 1.5
+            return player.take_damage(enemy.attack)
         return False
 
 

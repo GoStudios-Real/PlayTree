@@ -39,9 +39,10 @@ class Enemy:
         dist = math.sqrt(dx * dx + dy * dy)
 
         if dist < self.aggro_range:
+            # attack_cooldown is set by CombatSystem.deal_damage_to_player
+            # when the hit lands — resetting it here would swallow every swing
             if dist < self.attack_range and self.attack_cooldown <= 0:
                 self.state = "attacking"
-                self.attack_cooldown = 1.5
             else:
                 self.state = "chasing"
         else:

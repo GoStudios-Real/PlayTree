@@ -2299,11 +2299,11 @@ class Game:
                 eenemy.update(dt, self.player.x, self.player.y)
                 if eenemy.attack_cooldown <= 0 and eenemy.state == "attacking":
                     dmg = eenemy.attack
+                    eenemy.attack_cooldown = 1.5
                     if self.player.take_damage(dmg):
                         self.player.particles.burst(self.player.x, self.player.y, RED, 8, 3, 20, 4)
                         self.camera_shake = 3
                         self.audio.play("hit")
-                        eenemy.attack_cooldown = 1.5
                         if self.mount and self.mount.mounted:
                             self.mount.take_damage(dmg // 2)
                         if self.player.hp <= 0:
