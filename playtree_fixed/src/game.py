@@ -155,7 +155,9 @@ class Game:
         self.go_live_ts = get_go_live_ts(GO_LIVE_DAYS, FORCE_LIVE)
         self.is_live = bool(FORCE_LIVE) or time.time() >= self.go_live_ts
         self.go_live_synced = False
-        if not FORCE_LIVE and not os.environ.get("PLAYTREE_OFFLINE"):
+        # Offline by default — no background network. Set PLAYTREE_ONLINE=1 to
+        # sync the timestamp from the website (config.GO_LIVE_EPOCH already wins).
+        if not FORCE_LIVE and os.environ.get("PLAYTREE_ONLINE") and not os.environ.get("PLAYTREE_OFFLINE"):
             threading.Thread(target=self._fetch_go_live, daemon=True).start()
         self._live_announced = False
         self.npcs = []
@@ -669,8 +671,12 @@ class Game:
             pass
 
     def _check_for_updates(self):
-        """Query GitHub for the latest commit — works in the packaged EXE (stdlib only)."""
+        """Query GitHub for the latest commit — offline by default, opt-in with PLAYTREE_ONLINE=1."""
         ul = self.update_log
+        if not (os.environ.get("PLAYTREE_ONLINE") and not os.environ.get("PLAYTREE_OFFLINE")):
+            ul.status_line = f"Offline mode — running v{VERSION}. Set PLAYTREE_ONLINE=1 to check GitHub."
+            self.audio.play("menu_hover")
+            return
         ul.status_line = "Checking GitHub..."
         try:
             import json
