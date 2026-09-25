@@ -6,6 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0e1320" />
+  <meta name="playtree-go-live" content="2026-10-02T07:37:58Z" />
   <title>PlayTree - Chapter I: Season I</title>
   <link rel="icon" type="image/svg+xml" href="assets/icons/playtree.svg" />
   <link rel="stylesheet" href="assets/css/main.css" />
@@ -52,13 +53,10 @@
   </style>
   <script>
     (function () {
-      var KEY = "playtree_go_live";
-      var DAYS = 7; // keep in sync with config.py GO_LIVE_DAYS
-      var goLive = parseInt(localStorage.getItem(KEY), 10);
-      if (!goLive || isNaN(goLive) || goLive <= 0) {
-        goLive = Date.now() + DAYS * 86400000;
-        localStorage.setItem(KEY, String(goLive));
-      }
+      // Canonical go-live instant — the game EXE reads this exact value from
+      // this page, so the in-game countdown always matches this countdown.
+      var GO_LIVE_ISO = "2026-10-02T07:37:58Z";
+      var goLive = Date.parse(GO_LIVE_ISO);
       var box = document.getElementById("goLive");
       var label = document.getElementById("goLiveLabel");
       var time = document.getElementById("goLiveTime");
