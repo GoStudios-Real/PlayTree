@@ -25,6 +25,62 @@
     <div class="loader-bar"><div class="loader-fill" id="loaderFill"></div></div>
     <p class="loader-text" id="loaderText">Planting the seed...</p>
   </div>
+
+  <!-- Go-live countdown: matches the game EXE (first launch/visit + 7 days) -->
+  <div id="goLive" aria-live="polite">
+    <span id="goLiveLabel">GOES LIVE IN</span>
+    <span id="goLiveTime">--d --:--:--</span>
+  </div>
+  <style>
+    #goLive {
+      position: fixed; right: 16px; bottom: 16px; z-index: 99999;
+      display: flex; flex-direction: column; gap: 2px; align-items: flex-end;
+      background: rgba(14, 19, 32, .92); border: 1px solid #59c48f;
+      border-radius: 10px; padding: 10px 14px;
+      font-family: "Segoe UI", system-ui, sans-serif; color: #cfe9da;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, .45); user-select: none;
+    }
+    #goLiveLabel { font-size: 11px; letter-spacing: 2px; color: #8fb7a0; }
+    #goLiveTime  { font-size: 22px; font-weight: 700; color: #ffd75e; font-variant-numeric: tabular-nums; }
+    #goLive.live { border-color: #ffd75e; animation: livePulse 1.2s ease-in-out infinite; }
+    #goLive.live #goLiveLabel { color: #ffd75e; }
+    #goLive.live #goLiveTime  { color: #59ff9d; font-size: 26px; }
+    @keyframes livePulse {
+      0%, 100% { box-shadow: 0 0 0 rgba(89, 255, 157, 0); transform: scale(1); }
+      50%      { box-shadow: 0 0 24px rgba(89, 255, 157, .55); transform: scale(1.03); }
+    }
+  </style>
+  <script>
+    (function () {
+      var KEY = "playtree_go_live";
+      var DAYS = 7; // keep in sync with config.py GO_LIVE_DAYS
+      var goLive = parseInt(localStorage.getItem(KEY), 10);
+      if (!goLive || isNaN(goLive) || goLive <= 0) {
+        goLive = Date.now() + DAYS * 86400000;
+        localStorage.setItem(KEY, String(goLive));
+      }
+      var box = document.getElementById("goLive");
+      var label = document.getElementById("goLiveLabel");
+      var time = document.getElementById("goLiveTime");
+      function pad(n) { return (n < 10 ? "0" : "") + n; }
+      function tick() {
+        var ms = goLive - Date.now();
+        if (ms <= 0) {
+          box.classList.add("live");
+          label.textContent = "WE ARE";
+          time.textContent = "LIVE!";
+          return;
+        }
+        var d = Math.floor(ms / 86400000);
+        var h = Math.floor(ms % 86400000 / 3600000);
+        var m = Math.floor(ms % 3600000 / 60000);
+        var s = Math.floor(ms % 60000 / 1000);
+        time.textContent = d + "d " + pad(h) + ":" + pad(m) + ":" + pad(s);
+        setTimeout(tick, 1000);
+      }
+      tick();
+    })();
+  </script>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>
