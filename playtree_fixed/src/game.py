@@ -1353,7 +1353,7 @@ class Game:
             elif event.key == pygame.K_0:
                 self.player.unequip_weapon()
                 self.show_message("Equipped: Fists", 1)
-            elif event.key == pygame.K_s and not self.crafting_open:
+            elif event.key == pygame.K_o and not self.crafting_open:
                 was=self.shop_open
                 self._close_all_overlays()
                 self.shop_open = not was
@@ -2079,7 +2079,7 @@ class Game:
                 touch_keys = [
                     (self.touch_controls.storm_btn, pygame.K_t),
                     (self.touch_controls.tame_btn, pygame.K_TAB),
-                    (self.touch_controls.shop_btn, pygame.K_s),
+                    (self.touch_controls.shop_btn, pygame.K_o),
                     (self.touch_controls.build_btn, pygame.K_v),
                     (self.touch_controls.battlepass_btn, pygame.K_F1),
                     (self.touch_controls.lobby_btn, pygame.K_p),
