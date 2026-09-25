@@ -58,13 +58,15 @@ class World:
     def _generate_region_centers(self):
         cols = 4
         rows = 4
-        spacing_x = WORLD_W // cols
-        spacing_y = WORLD_H // rows
+        # Local region grid around the spawn (0..~2000) — the 10^25 world is
+        # infinite for practical play, so regions must NOT scale with WORLD_W.
+        spacing_x = 800
+        spacing_y = 800
         for i, region in enumerate(REGIONS):
             col = i % cols
             row = i // cols
-            rx = spacing_x // 2 + col * spacing_x + random.randint(-200, 200)
-            ry = spacing_y // 2 + row * spacing_y + random.randint(-200, 200)
+            rx = 300 + (col - 1) * spacing_x + random.randint(-200, 200)
+            ry = 300 + (row - 1) * spacing_y + random.randint(-200, 200)
             self.region_centers.append({"name": region["name"], "color": region["color"],
                                         "x": rx, "y": ry, "radius": 400 + random.randint(-80, 80)})
 

@@ -415,8 +415,9 @@ class Game:
             return None
 
     def start_new_game(self):
-        spawn_x = WORLD_W // 2 + random.randint(-200, 200)
-        spawn_y = WORLD_H // 2 + random.randint(-200, 200)
+        # Spawn near origin — the 10^25 world centre is far beyond float precision
+        spawn_x = 300 + random.randint(-200, 200)
+        spawn_y = 300 + random.randint(-200, 200)
         self.player = Player(spawn_x, spawn_y, self.class_cycle[self.selected_class])
         self.player.name = self.character_name if self.character_name.strip() else "Wanderer"
         self.player.equipment = EquipmentSystem(self.player)
@@ -473,7 +474,7 @@ class Game:
             return False
         class_map = {c.value: c for c in self.class_cycle}
         pc = class_map.get(data.get("player_class", "Guardian"), PlayerClass.GUARDIAN)
-        self.player = Player(data.get("x", WORLD_W // 2), data.get("y", WORLD_H // 2), pc)
+        self.player = Player(data.get("x", 300), data.get("y", 300), pc)
         self.player.name = data.get("name", "Wanderer")
         self.player.level = data.get("level", 1)
         self.player.hp = data.get("hp", self.player.max_hp)
@@ -584,18 +585,21 @@ class Game:
         return True
 
     def _spawn_initial_entities(self):
+        px = int(self.player.x) if self.player else 300
+        py = int(self.player.y) if self.player else 300
+
+        def rx():
+            return max(50, min(WORLD_W - 50, px + random.randint(-600, 600)))
+
+        def ry():
+            return max(50, min(WORLD_H - 50, py + random.randint(-600, 600)))
+
         for _ in range(8):
-            ex = random.randint(100, WORLD_W - 100)
-            ey = random.randint(100, WORLD_H - 100)
-            self.enemies.append(Enemy(ex, ey, random.randint(0, 3)))
+            self.enemies.append(Enemy(rx(), ry(), random.randint(0, 3)))
         for _ in range(4):
-            ex = random.randint(100, WORLD_W - 100)
-            ey = random.randint(100, WORLD_H - 100)
-            self.expanded_enemies.append(ExpandedEnemy(ex, ey))
+            self.expanded_enemies.append(ExpandedEnemy(rx(), ry()))
         for _ in range(5):
-            cx = random.randint(100, WORLD_W - 100)
-            cy = random.randint(100, WORLD_H - 100)
-            self.creatures.append(Creature(cx, cy, random.randint(0, 4)))
+            self.creatures.append(Creature(rx(), ry(), random.randint(0, 4)))
 
     def show_message(self, text, duration=3):
         self.message = text
@@ -702,7 +706,7 @@ class Game:
         if self.player:
             cx, cy = self.player.x, self.player.y
         else:
-            cx, cy = WORLD_W // 2, WORLD_H // 2
+            cx, cy = 300, 300
         types = list(NPC_TYPES.keys())
         for i, npc_type in enumerate(types):
             angle = (i / max(1, len(types))) * math.tau
@@ -1141,7 +1145,7 @@ class Game:
                 if self.touch_controls.enabled:
                     self.touch_controls.handle_event(event)
                 if self.multiplayer.typing_chat:
-                    self.multiplayer.handle_event(event)
+                    self.multiplayer.handle_key(event, self.player)
                 else:
                     self._handle_gameplay(event)
 
@@ -1872,12 +1876,16 @@ class Game:
         # Go-live countdown — flip everything LIVE the moment it reaches zero
         if not self.is_live and time.time() >= self.go_live_ts:
             self._go_live_event()
-        # on-screen keyboard for touch — show when typing name / login
+        # on-screen keyboard for touch — show when typing name / login / chat
         try:
             typing = bool(getattr(self, 'typing_name', False) and self.state in [GameState.CHARACTER_CREATE, GameState.LOGIN])
             # also show if account is in text entry
             if hasattr(self, 'account') and getattr(self.account, 'state', '') in ('login','register'):
                 typing = self.state == GameState.LOGIN
+            # multiplayer chat box
+            mp = getattr(self, 'multiplayer', None)
+            if mp is not None and getattr(mp, 'typing_chat', False):
+                typing = True
             self.touch_controls.keyboard.visible = typing and self.touch_controls.enabled
         except: pass
         self.time += dt
@@ -2084,11 +2092,21 @@ class Game:
                     (self.touch_controls.battlepass_btn, pygame.K_F1),
                     (self.touch_controls.lobby_btn, pygame.K_p),
                     (self.touch_controls.achv_btn, pygame.K_u),
+                    (self.touch_controls.save_btn, pygame.K_F5),
+                    (self.touch_controls.shot_btn, pygame.K_F12),
+                    (self.touch_controls.lb_btn, pygame.K_F11),
                 ]
                 for tbtn, tkey in touch_keys:
                     if tbtn.just_pressed():
                         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=tkey, mod=0, unicode=""))
                         self.audio.play("tab_switch")
+                if self.touch_controls.chat_btn.just_pressed():
+                    if self.multiplayer.connected:
+                        self.multiplayer.typing_chat = True
+                        self.multiplayer.chat_visible = True
+                    else:
+                        self.show_message("Join a lobby to chat!", 2)
+                    self.audio.play("tab_switch")
                 if self.touch_controls.weapon_btn.just_pressed():
                     self._touch_cycle_weapon()
 
@@ -2230,8 +2248,8 @@ class Game:
             if len(self.enemies) < 7 and random.random() < 0.005:
                 self._spawn_new_enemy()
             if len(self.creatures) < 4 and random.random() < 0.002:
-                cx = random.randint(100, WORLD_W - 100)
-                cy = random.randint(100, WORLD_H - 100)
+                cx = max(50, min(WORLD_W - 50, self.player.x + random.randint(-600, 600)))
+                cy = max(50, min(WORLD_H - 50, self.player.y + random.randint(-600, 600)))
                 self.creatures.append(Creature(cx, cy, random.randint(0, 4)))
 
             # Round system: spawn boss when enough enemies killed
@@ -3040,7 +3058,18 @@ class Game:
         mm_size = 150
         mm_x = WIDTH - mm_size - 20
         mm_y = 20
-        scale = mm_size / max(WORLD_W, WORLD_H)
+        # Player-centred local zoom — the world is 10^25, so a global scale
+        # would collapse everything into one pixel. Show a 6000x6000 window.
+        view = 3000.0
+        scale = mm_size / (2 * view)
+        cxp = mm_x + mm_size // 2
+        cyp = mm_y + mm_size // 2
+        ppos = (self.player.x, self.player.y) if self.player else (300, 300)
+
+        def w2m(wx, wy):
+            return (cxp + int((wx - ppos[0]) * scale),
+                    cyp + int((wy - ppos[1]) * scale))
+
         border = 2
 
         # Minimap background
@@ -3055,56 +3084,50 @@ class Game:
                                                              border *
                                                              2), border, border_radius=4)
 
-        # Draw terrain on minimap
+        # Draw terrain on minimap (sampled around the player)
         if self.world:
             chunk_px = max(1, int(mm_size / 30))
             for cx in range(0, mm_size, chunk_px):
                 for cy in range(0, mm_size, chunk_px):
-                    wx = int((cx / mm_size) * WORLD_W)
-                    wy = int((cy / mm_size) * WORLD_H)
+                    wx = ppos[0] + ((cx / mm_size) - 0.5) * 2 * view
+                    wy = ppos[1] + ((cy / mm_size) - 0.5) * 2 * view
                     tile = self.world.get_tile(int(wx // TILE_SIZE), int(wy // TILE_SIZE))
                     if tile:
                         color = tile.color if hasattr(tile, 'color') else (20, 30, 20)
                         self.screen.set_at((mm_x + cx, mm_y + cy), color)
 
-        # Player dot
-        px = mm_x + int(self.player.x * scale)
-        py = mm_y + int(self.player.y * scale)
-        pygame.draw.circle(self.screen, GREEN_GLOW, (px, py), 4)
-        pygame.draw.circle(self.screen, (150, 255, 180), (px, py), 2)
+        # Player dot (centre)
+        pygame.draw.circle(self.screen, GREEN_GLOW, (cxp, cyp), 4)
+        pygame.draw.circle(self.screen, (150, 255, 180), (cxp, cyp), 2)
 
         # Enemy dots (red)
         for enemy in self.enemies:
-            ex = mm_x + int(enemy.x * scale)
-            ey = mm_y + int(enemy.y * scale)
+            ex, ey = w2m(enemy.x, enemy.y)
             if mm_x <= ex <= mm_x + mm_size and mm_y <= ey <= mm_y + mm_size:
                 pygame.draw.circle(self.screen, RED, (ex, ey), 2)
 
         # Expanded enemy dots (dark red)
         for eenemy in self.expanded_enemies:
-            ex = mm_x + int(eenemy.x * scale)
-            ey = mm_y + int(eenemy.y * scale)
+            ex, ey = w2m(eenemy.x, eenemy.y)
             if mm_x <= ex <= mm_x + mm_size and mm_y <= ey <= mm_y + mm_size:
                 pygame.draw.circle(self.screen, (150, 20, 20), (ex, ey), 2)
 
-        # Resource dots (gold/colored)
+        # Resource dots (gold/colored) — sampled around the player
         if self.world:
             for _ in range(15):
-                rx = random.randint(0, WORLD_W - 1)
-                ry = random.randint(0, WORLD_H - 1)
+                rx = ppos[0] + random.uniform(-view, view)
+                ry = ppos[1] + random.uniform(-view, view)
                 tile = self.world.get_tile(int(rx // TILE_SIZE), int(ry // TILE_SIZE))
                 if tile and tile.resource:
                     res_data = RESOURCES.get(tile.resource, {})
                     res_color = res_data.get("color", (200, 200, 100))
-                    rmx = mm_x + int(rx * scale)
-                    rmy = mm_y + int(ry * scale)
+                    rmx, rmy = w2m(rx, ry)
                     if mm_x <= rmx <= mm_x + mm_size and mm_y <= rmy <= mm_y + mm_size:
                         pygame.draw.circle(self.screen, res_color, (rmx, rmy), 1)
 
         # Creature dots (blue)
         for creature in self.creatures:
-            cx2 = mm_x + int(creature.x * scale)
-            cy2 = mm_y + int(creature.y * scale)
+            cx2, cy2 = w2m(creature.x, creature.y)
             if mm_x <= cx2 <= mm_x + mm_size and mm_y <= cy2 <= mm_y + mm_size:
                 pygame.draw.circle(self.screen, (100, 150, 255), (cx2, cy2), 2)
 

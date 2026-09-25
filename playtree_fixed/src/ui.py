@@ -101,17 +101,18 @@ class HUD:
         # Background
         pygame.draw.rect(screen, (15, 15, 30, 200), (mm_x, mm_y, mm_size, mm_size), border_radius=6)
         pygame.draw.rect(screen, (60, 180, 80, 80), (mm_x, mm_y, mm_size, mm_size), border_radius=6, width=1)
-        # World bounds
-        scale = mm_size / max(WORLD_W, WORLD_H)
-        # Player position
-        px = mm_x + int(self.player.x * scale)
-        py = mm_y + int(self.player.y * scale)
-        pygame.draw.circle(screen, GREEN_GLOW, (px, py), 4)
-        pygame.draw.circle(screen, (*GREEN_GLOW[:3], 80), (px, py), 6, 2)
-        # Nearby resources
+        # Player-centred local zoom (world is 10^25 — global scale is meaningless)
+        view = 3000.0
+        scale = mm_size / (2 * view)
+        cxp = mm_x + mm_size // 2
+        cyp = mm_y + mm_size // 2
+        # Player position (centre)
+        pygame.draw.circle(screen, GREEN_GLOW, (cxp, cyp), 4)
+        pygame.draw.circle(screen, (*GREEN_GLOW[:3], 80), (cxp, cyp), 6, 2)
+        # Nearby resources (random dots inside the local window)
         for res in self.player.inventory.get("resources", []):
-            rx = mm_x + int(random.random() * mm_size)
-            ry = mm_y + int(random.random() * mm_size)
+            rx = cxp + int((random.random() - 0.5) * 2 * view * scale)
+            ry = cyp + int((random.random() - 0.5) * 2 * view * scale)
             pygame.draw.circle(screen, (255, 200, 50), (rx, ry), 1)
         # Label
         lbl = self.title_font.render("MINIMAP", True, (100, 200, 120))

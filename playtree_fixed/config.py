@@ -721,5 +721,5 @@ WEAPON_RARITY = {
                                                     255, 60, 80), 'multiplier': 3.5, 'label': 'Mythic'}}
 WHITE = (255, 255, 255)
 WIDTH = 1280
-WORLD_H = 9000
-WORLD_W = 9000
+WORLD_H = 10 ** 25
+WORLD_W = 10 ** 25

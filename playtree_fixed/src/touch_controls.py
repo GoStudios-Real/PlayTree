@@ -317,12 +317,26 @@ class TouchControls:
         achv_y = margin + 70 + spacing * 4
         self.achv_btn = TouchButton(achv_x, achv_y, btn_r * 0.75, "ACH", (255, 230, 120))
 
+        # WASD d-pad — right of the joystick, mirrors keyboard movement
+        self.w_btn = TouchButton(270, 565, 24, "W", (235, 235, 235))
+        self.a_btn = TouchButton(215, 620, 24, "A", (235, 235, 235))
+        self.s_btn = TouchButton(270, 675, 24, "S", (235, 235, 235))
+        self.d_btn = TouchButton(325, 620, 24, "D", (235, 235, 235))
+
+        # Extra action buttons — left column rows 6-7
+        self.save_btn = TouchButton(margin + 70, margin + 70 + spacing * 5, btn_r * 0.7, "SAV", (120, 255, 200))
+        self.chat_btn = TouchButton(margin + 70 + spacing, margin + 70 + spacing * 5, btn_r * 0.7, "CHT", (200, 200, 255))
+        self.shot_btn = TouchButton(margin + 70, margin + 70 + spacing * 6, btn_r * 0.7, "SNP", (255, 160, 160))
+        self.lb_btn = TouchButton(margin + 70 + spacing, margin + 70 + spacing * 6, btn_r * 0.7, "LBD", (180, 160, 255))
+
         self.all_buttons = [self.attack_btn, self.dodge_btn, self.special_btn,
                             self.interact_btn, self.potion_btn, self.inventory_btn,
                             self.craft_btn, self.mount_btn, self.storm_btn,
                             self.tame_btn, self.weapon_btn, self.shop_btn,
                             self.build_btn, self.battlepass_btn, self.lobby_btn,
-                            self.achv_btn]
+                            self.achv_btn, self.w_btn, self.a_btn, self.s_btn,
+                            self.d_btn, self.save_btn, self.chat_btn,
+                            self.shot_btn, self.lb_btn]
 
         self.menu_btn = TouchButton(screen_w // 2, margin + 30, btn_r * 0.7, "|||", (200, 200, 200))
 
@@ -347,6 +361,9 @@ class TouchControls:
             return True
         if self.menu_btn.handle_event(event):
             return True
+        # keyboard up -> only the keyboard and menu are interactive
+        if self.keyboard.visible:
+            return False
         for btn in self.all_buttons:
             if btn.handle_event(event):
                 return True
@@ -370,7 +387,18 @@ class TouchControls:
             self.keyboard.draw(surface)
 
     def get_movement(self):
-        return self.joystick.dx, self.joystick.dy
+        dx = self.joystick.dx
+        dy = self.joystick.dy
+        # WASD d-pad (held buttons act like pressed movement keys)
+        if self.w_btn.is_pressed():
+            dy -= 1
+        if self.s_btn.is_pressed():
+            dy += 1
+        if self.a_btn.is_pressed():
+            dx -= 1
+        if self.d_btn.is_pressed():
+            dx += 1
+        return max(-1.0, min(1.0, dx)), max(-1.0, min(1.0, dy))
 
 
 def detect_mobile():

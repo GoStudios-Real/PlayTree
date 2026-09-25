@@ -74,7 +74,7 @@ class GameServer:
                         "name": f"Player{len(self.clients) + 1}",
                     }
                     self.player_states[client_id] = {
-                        "x": WORLD_W // 2, "y": WORLD_H // 2,
+                        "x": 300, "y": 300,
                         "hp": 100, "max_hp": 100,
                         "name": self.clients[client_id]["name"],
                         "class": "Guardian",
