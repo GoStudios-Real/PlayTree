@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0e1320" />
-  <meta name="playtree-go-live" content="2026-10-02T07:37:58Z" />
+  <meta name="playtree-go-live" content="2026-09-26T13:33:00+08:00" />
   <title>PlayTree - Chapter I: Season I</title>
   <link rel="icon" type="image/svg+xml" href="assets/icons/playtree.svg" />
   <link rel="stylesheet" href="assets/css/main.css" />
@@ -53,9 +53,9 @@
   </style>
   <script>
     (function () {
-      // Canonical go-live instant — the game EXE reads this exact value from
-      // this page, so the in-game countdown always matches this countdown.
-      var GO_LIVE_ISO = "2026-10-02T07:37:58Z";
+      // Canonical go-live instant: 26/09/2026 1:33 PM Perth (AWST, UTC+8) —
+      // the game EXE reads this exact value from this page too, so both match.
+      var GO_LIVE_ISO = "2026-09-26T13:33:00+08:00";
       var goLive = Date.parse(GO_LIVE_ISO);
       var box = document.getElementById("goLive");
       var label = document.getElementById("goLiveLabel");
@@ -77,6 +77,296 @@
         setTimeout(tick, 1000);
       }
       tick();
+    })();
+  </script>
+  <!-- ===== PlayTree Games — store page, ratings, follows, chat, installs ===== -->
+  <button id="gamesBtn" type="button">GAMES</button>
+  <div id="gamesOverlay" hidden>
+    <div class="gwin">
+      <header class="gtop">
+        <h2>PLAYTREE GAMES</h2>
+        <div class="gtopRight">
+          <input id="gSearch" type="search" placeholder="Search games..." />
+          <button id="gamesClose" type="button">CLOSE</button>
+        </div>
+      </header>
+      <div class="gbody">
+        <section id="gamesGrid" aria-label="Game catalogue"></section>
+        <aside id="chatPane">
+          <h3>COMMUNITY CHAT <span id="chatCount">offline</span></h3>
+          <div id="chatLog"></div>
+          <div class="chatRow">
+            <input id="chatInput" type="text" maxlength="200" placeholder="Say something..." />
+            <button id="chatSend" type="button">SEND</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <div id="gToast" role="status"></div>
+  <style>
+    #gamesBtn {
+      position: fixed; top: 12px; left: 12px; z-index: 99998;
+      padding: 9px 22px; font: 700 15px "Segoe UI", system-ui, sans-serif;
+      letter-spacing: 2px; color: #0e1320; background: #59c48f;
+      border: 0; border-radius: 24px; cursor: pointer;
+      box-shadow: 0 3px 14px rgba(0,0,0,.45);
+    }
+    #gamesBtn:hover { background: #7dffc0; }
+    #gamesOverlay {
+      position: fixed; inset: 0; z-index: 99997;
+      background: rgba(5, 8, 14, .88); backdrop-filter: blur(3px);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    .gwin {
+      position: absolute; inset: 3vh 3vw; display: flex; flex-direction: column;
+      background: #0e1320; border: 1px solid #59c48f; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+    }
+    .gtop {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; background: #131a2c; border-bottom: 1px solid #243049;
+    }
+    .gtop h2 { margin: 0; font-size: 20px; letter-spacing: 3px; color: #59ff9d; }
+    .gtopRight { display: flex; gap: 10px; align-items: center; }
+    #gSearch {
+      background: #0b101c; border: 1px solid #2b3a55; color: #cfe9da;
+      border-radius: 8px; padding: 7px 12px; font-size: 13px; width: 180px;
+    }
+    #gamesClose {
+      background: #243049; color: #cfe9da; border: 1px solid #3a4c70;
+      border-radius: 8px; padding: 7px 16px; font-weight: 700; cursor: pointer;
+    }
+    #gamesClose:hover { background: #31405f; }
+    .gbody { flex: 1; display: flex; gap: 14px; padding: 14px; min-height: 0; }
+    #gamesGrid {
+      flex: 1; display: grid; gap: 14px; overflow-y: auto; align-content: start;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      padding-right: 4px;
+    }
+    .gcard {
+      background: #131a2c; border: 1px solid #243049; border-radius: 12px;
+      padding: 14px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .gcard:hover { border-color: #59c48f; }
+    .gctitle { font-size: 17px; font-weight: 700; color: #eafff2; }
+    .gplat { display: block; font-size: 11px; font-weight: 400; color: #8fb7a0; letter-spacing: 1px; }
+    .gdesc { margin: 0; font-size: 13px; color: #9fb8c9; min-height: 34px; }
+    .grate { font-size: 16px; color: #3a4c70; cursor: pointer; user-select: none; }
+    .grate .on { color: #ffd75e; }
+    .grateval { font-size: 12px; color: #8fb7a0; margin-left: 6px; cursor: default; }
+    .gstats { font-size: 12px; color: #7f9db3; display: flex; gap: 12px; flex-wrap: wrap; }
+    .gbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+    .gbtns button, .gextra a {
+      font-size: 12px; font-weight: 700; padding: 6px 11px; border-radius: 7px;
+      border: 1px solid #2b3a55; background: #1a2438; color: #cfe9da;
+      cursor: pointer; text-decoration: none; display: inline-block;
+    }
+    .gbtns .gplay { background: #59c48f; border-color: #59c48f; color: #0e1320; }
+    .gbtns .ginstall { background: #ffd75e; border-color: #ffd75e; color: #0e1320; }
+    .gbtns .active { background: #2c6e4f; border-color: #59ff9d; color: #eafff2; }
+    .gbtns button:hover, .gextra a:hover { filter: brightness(1.25); }
+    .gextra { display: flex; flex-wrap: wrap; gap: 6px; }
+    .gextra a { font-size: 11px; border-style: dashed; }
+    #chatPane {
+      width: 300px; min-width: 240px; display: flex; flex-direction: column;
+      background: #101728; border: 1px solid #243049; border-radius: 12px; padding: 12px;
+    }
+    #chatPane h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 2px; color: #59ff9d; }
+    #chatPane h3 span { color: #7f9db3; font-weight: 400; letter-spacing: 0; }
+    #chatLog {
+      flex: 1; overflow-y: auto; font-size: 13px; display: flex;
+      flex-direction: column; gap: 6px; padding-right: 4px; min-height: 160px;
+    }
+    .chatMsg b { color: #ffd75e; font-weight: 700; }
+    .chatMsg.me b { color: #59ff9d; }
+    .chatMsg .t { color: #6b8299; font-size: 10px; margin-left: 6px; }
+    .chatRow { display: flex; gap: 6px; margin-top: 8px; }
+    #chatInput {
+      flex: 1; background: #0b101c; border: 1px solid #2b3a55; color: #cfe9da;
+      border-radius: 8px; padding: 7px 10px; font-size: 13px; min-width: 0;
+    }
+    #chatSend {
+      background: #59c48f; border: 0; color: #0e1320; font-weight: 700;
+      border-radius: 8px; padding: 7px 12px; cursor: pointer;
+    }
+    #gToast {
+      position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+      z-index: 100000; background: #131a2c; border: 1px solid #59c48f;
+      color: #eafff2; padding: 10px 20px; border-radius: 10px; font: 600 14px
+      "Segoe UI", system-ui, sans-serif; opacity: 0; pointer-events: none;
+      transition: opacity .25s; max-width: 80vw;
+    }
+    #gToast.show { opacity: 1; }
+    @media (max-width: 860px) {
+      .gbody { flex-direction: column; }
+      #chatPane { width: auto; height: 220px; }
+      #gSearch { width: 120px; }
+    }
+  </style>
+  <script>
+    (function () {
+      var RAW = "https://raw.githubusercontent.com/GoStudios-Real/PlayTree/master/";
+      var GAMES = [
+        { id: "playtree", title: "PlayTree", desc: "Flagship open-world adventure — villagers, storms, mounts, base building and Admin Abuse.",
+          plat: ["Windows", "Android", "macOS", "Linux"], web: true,
+          exe: "standalone/PLAYTREE.exe", apk: "GoLiteAndroid/vendor/goconsole/prebuilt/PlayTree.apk",
+          src: "playtree_fixed/build_macos.sh" },
+        { id: "dungeon", title: "PlayTree Dungeon", desc: "Descend the roots, fight the dark, claim the loot.", plat: ["Desktop"], zip: "standalone/PlayTreeDungeon.zip" },
+        { id: "puzzle", title: "PlayTree Puzzle", desc: "Brain-bending block puzzles in the canopy.", plat: ["Desktop"], zip: "standalone/PlayTreePuzzle.zip" },
+        { id: "racing", title: "PlayTree Racing", desc: "Leaf-runner racing at full speed.", plat: ["Desktop"], zip: "standalone/PlayTreeRacing.zip" },
+        { id: "space", title: "PlayTree Space", desc: "Blast off and defend the grove from orbit.", plat: ["Desktop"], zip: "standalone/PlayTreeSpace.zip" },
+        { id: "towerdef", title: "PlayTree Tower Defense", desc: "Plant towers, stop the swarm.", plat: ["Desktop"], zip: "standalone/PlayTreeTowerDef.zip" },
+        { id: "underwater", title: "PlayTree Underwater", desc: "Dive the coral depths and survive.", plat: ["Desktop"], zip: "standalone/PlayTreeUnderwater.zip" },
+        { id: "football", title: "PlayTree Football", desc: "Arcade kicks in the forest league.", plat: ["Desktop"], zip: "standalone/PlayTreeFootBall.zip" },
+        { id: "three-d", title: "PlayTree 3D", desc: "The grove, rendered in full 3D.", plat: ["Desktop"], zip: "standalone/PlayTree3D.zip" }
+      ];
+      var STATS_KEY = "pt_game_stats_v1", CHAT_KEY = "pt_chat_v1";
+      var stats = {};
+      try { stats = JSON.parse(localStorage.getItem(STATS_KEY)) || {}; } catch (e) { stats = {}; }
+      function saveStats() { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) {} }
+      function st(id) { if (!stats[id]) stats[id] = { fav: 0, like: 0, follow: 0, rate: 0 }; return stats[id]; }
+      function seed(id, mod) { var h = 2166136261; for (var i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = (h * 16777619) >>> 0; } return h % mod; }
+      function baseLikes(g) { return 120 + seed(g.id, 3800); }
+      function baseFavs(g) { return 40 + seed(g.id + "f", 900); }
+      function baseFlws(g) { return 15 + seed(g.id + "w", 400); }
+      function baseRate(g) { return (3.6 + (seed(g.id + "r", 14) / 10)).toFixed(1); }
+      function baseVotes(g) { return 48 + seed(g.id + "v", 2400); }
+
+      var toastEl = document.getElementById("gToast"), toastTimer = null;
+      function toast(msg) {
+        toastEl.textContent = msg; toastEl.classList.add("show");
+        clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2600);
+      }
+      function download(path) {
+        var a = document.createElement("a");
+        a.href = RAW + path; a.rel = "noopener";
+        document.body.appendChild(a); a.click(); a.remove();
+        toast("Downloading " + path.split("/").pop() + " ...");
+      }
+
+      var grid = document.getElementById("gamesGrid");
+      function render() {
+        var q = (document.getElementById("gSearch").value || "").toLowerCase();
+        grid.innerHTML = "";
+        GAMES.forEach(function (g) {
+          if (q && (g.title + " " + g.desc).toLowerCase().indexOf(q) < 0) return;
+          var s = st(g.id);
+          var card = document.createElement("div");
+          card.className = "gcard";
+          var stars = "";
+          for (var i = 1; i <= 5; i++) stars += '<span data-star="' + i + '" class="' + (i <= s.rate ? "on" : "") + '">&#9733;</span>';
+          var votes = +baseVotes(g) + (s.rate ? 1 : 0);
+          var html = '<div class="gctitle">' + g.title + '<span class="gplat">' + g.plat.join(" &middot; ") + "</span></div>" +
+            '<p class="gdesc">' + g.desc + "</p>" +
+            '<div class="grate">' + stars + '<span class="grateval">' + baseRate(g) + " (" + votes + ")</span></div>" +
+            '<div class="gstats"><span class="likes">&#10084; ' + (baseLikes(g) + s.like) + " likes</span>" +
+            '<span class="favs">&#9733; ' + (baseFavs(g) + s.fav) + " favourites</span>" +
+            '<span class="flws">&#10003; ' + (baseFlws(g) + s.follow) + " followers</span></div>" +
+            '<div class="gbtns">' +
+            '<button class="gplay" type="button">PLAY</button>' +
+            '<button class="ginstall" type="button">INSTALL</button>' +
+            '<button class="glike' + (s.like ? " active" : "") + '" type="button">' + (s.like ? "LIKED" : "LIKE") + "</button>" +
+            '<button class="gfav' + (s.fav ? " active" : "") + '" type="button">' + (s.fav ? "FAVOURITED" : "FAVOURITE") + "</button>" +
+            '<button class="gfollow' + (s.follow ? " active" : "") + '" type="button">' + (s.follow ? "FOLLOWING" : "FOLLOW") + "</button>" +
+            "</div>";
+          if (g.web || g.exe || g.apk) {
+            html += '<div class="gextra">' +
+              (g.exe ? '<a data-dl="' + g.exe + '" href="#">Windows .exe</a>' : "") +
+              (g.apk ? '<a data-dl="' + g.apk + '" href="#">Android APK</a>' : "") +
+              (g.src ? '<a data-dl="' + g.src + '" href="#">macOS build script</a>' +
+                       '<a data-dl="playtree_fixed/build_linux.sh" href="#">Linux build script</a>' : "") +
+              "</div>";
+          }
+          card.innerHTML = html;
+          card.querySelector(".grate").addEventListener("click", function (e) {
+            var t = e.target.getAttribute("data-star"); if (!t) return;
+            s.rate = +t; saveStats(); render(); toast("You rated " + g.title + " " + t + "/5");
+          });
+          card.querySelector(".gplay").addEventListener("click", function () {
+            if (g.web) { closeOverlay(); toast("PlayTree is running — have fun!"); }
+            else toast("Install to play " + g.title + " on desktop (Python + pygame, free)!");
+          });
+          card.querySelector(".ginstall").addEventListener("click", function () {
+            download(g.zip || g.exe || g.apk);
+          });
+          function toggle(key, onMsg, offMsg) {
+            s[key] = s[key] ? 0 : 1; saveStats(); render();
+            toast(s[key] ? onMsg : offMsg);
+          }
+          card.querySelector(".glike").addEventListener("click", function () {
+            toggle("like", "You liked " + g.title + "!", "Like removed.");
+          });
+          card.querySelector(".gfav").addEventListener("click", function () {
+            toggle("fav", g.title + " added to favourites.", "Removed from favourites.");
+          });
+          card.querySelector(".gfollow").addEventListener("click", function () {
+            toggle("follow", "Following " + g.title + " — updates will appear here.", "Unfollowed " + g.title + ".");
+          });
+          var extras = card.querySelectorAll(".gextra a[data-dl]");
+          for (var k = 0; k < extras.length; k++) {
+            extras[k].addEventListener("click", function (ev) {
+              ev.preventDefault(); download(this.getAttribute("data-dl"));
+            });
+          }
+          grid.appendChild(card);
+        });
+      }
+      document.getElementById("gSearch").addEventListener("input", render);
+
+      /* ---------- community chat (works fully offline) ---------- */
+      var chatLog = document.getElementById("chatLog");
+      var chatInput = document.getElementById("chatInput");
+      var msgs = [];
+      try { msgs = JSON.parse(localStorage.getItem(CHAT_KEY)) || []; } catch (e) { msgs = []; }
+      if (!msgs.length) {
+        msgs = [
+          { u: "PlayTreeOfficial", t: "Welcome to PlayTree Games! Go-live: 26/09/2026, 1:33 PM Perth.", ts: Date.now() - 90000 },
+          { u: "Maya", t: "just rated Tower Defense 5 stars, the waves are brutal", ts: Date.now() - 60000 },
+          { u: "Kai", t: "installing the dungeon crawler now", ts: Date.now() - 30000 }
+        ];
+      }
+      function saveChat() { try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-200))); } catch (e) {} }
+      function renderChat() {
+        chatLog.innerHTML = "";
+        msgs.forEach(function (m) {
+          var d = document.createElement("div");
+          d.className = "chatMsg" + (m.u === "You" ? " me" : "");
+          var time = new Date(m.ts);
+          d.innerHTML = "<b></b><span class='t'></span><br>";
+          d.querySelector("b").textContent = m.u;
+          d.querySelector(".t").textContent = time.getHours() + ":" + ("0" + time.getMinutes()).slice(-2);
+          d.appendChild(document.createTextNode(m.t));
+          chatLog.appendChild(d);
+        });
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+      var BOT = ["Nice!", "See you at go-live!", "PlayTree is looking amazing", "Add me — I follow every game here",
+                 "The creator studio is so fun", "Anyone tried the dungeon yet?", "1:33 PM Perth can't come soon enough"];
+      function sendChat() {
+        var v = chatInput.value.trim(); if (!v) return;
+        msgs.push({ u: "You", t: v, ts: Date.now() });
+        chatInput.value = ""; saveChat(); renderChat();
+        setTimeout(function () {
+          var reply = BOT[Math.floor(Math.random() * BOT.length)];
+          msgs.push({ u: "Player" + (1 + Math.floor(Math.random() * 900)), t: reply, ts: Date.now() });
+          saveChat(); renderChat();
+        }, 700);
+      }
+      document.getElementById("chatSend").addEventListener("click", sendChat);
+      chatInput.addEventListener("keydown", function (e) { if (e.key === "Enter") sendChat(); e.stopPropagation(); });
+
+      /* ---------- overlay open/close (keep game from receiving input) ---------- */
+      var overlay = document.getElementById("gamesOverlay");
+      ["keydown", "keyup", "mousedown", "mouseup", "mousemove", "wheel", "touchstart", "touchend"].forEach(function (t) {
+        overlay.addEventListener(t, function (e) { e.stopPropagation(); });
+      });
+      function openOverlay() { overlay.hidden = false; render(); renderChat(); }
+      function closeOverlay() { overlay.hidden = true; }
+      document.getElementById("gamesBtn").addEventListener("click", openOverlay);
+      document.getElementById("gamesClose").addEventListener("click", closeOverlay);
+      overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) closeOverlay(); });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !overlay.hidden) closeOverlay(); });
     })();
   </script>
   <script type="module" src="src/main.js"></script>
