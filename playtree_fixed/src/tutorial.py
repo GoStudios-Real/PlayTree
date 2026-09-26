@@ -99,10 +99,11 @@ class Tutorial:
         step = self.steps[self.current_step]
         alpha = min(255, self.alpha)
 
-        # Bottom-center box
+        # Top-centre box — bottom is reserved for the LIVE PLAYERS panel,
+        # combo text and toasts, so the tutorial lives under the round banner
         bw, bh = 500, 80
         bx = WIDTH // 2 - bw // 2
-        by = HEIGHT - 110
+        by = 90
 
         overlay = pygame.Surface((bw, bh), pygame.SRCALPHA)
         overlay.fill((8, 12, 8, int(180 * alpha / 255)))

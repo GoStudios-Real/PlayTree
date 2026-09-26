@@ -133,6 +133,7 @@ DEFAULT_SETTINGS = {
     'screen_shake': True,
     'show_damage_numbers': True,
     'auto_collect': True,
+    'online_mode': False,
     'controls': {
         'move': 'WASD / Arrow Keys',
         'attack': 'Left Click',

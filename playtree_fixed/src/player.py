@@ -38,6 +38,7 @@ class Player:
         self.invincible = 0
         self.combo = 0
         self.combo_timer = 0
+        self.pending_attack = False
 
         self.inventory = {"resources": {}, "items": [], "equipment": {}, "weapons": []}
         self.creatures = []
@@ -153,6 +154,7 @@ class Player:
         for proj in self.projectiles:
             proj["x"] += proj["vx"]
             proj["y"] += proj["vy"]
+            proj["dist_traveled"] += math.hypot(proj["vx"], proj["vy"])
             proj["life"] -= 1
             self.particles.trail(proj["x"], proj["y"], proj["color"], 0.5, 1, 10, 2)
 
@@ -169,6 +171,7 @@ class Player:
         self.slash_anim = 1 if self.weapon["type"] == "sword" else 0
         self.combo += 1
         self.combo_timer = 2.0
+        self.pending_attack = True
 
         if self.weapon["type"] == "gun":
             speed = self.weapon.get("projectile_speed", 12)

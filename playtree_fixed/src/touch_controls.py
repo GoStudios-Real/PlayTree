@@ -250,8 +250,12 @@ class TouchControls:
         margin = 30
         btn_r = 28
         spacing = 70
+        # Left button column sits at x=285/355 — clear of the HUD stack
+        # (bars/skills/weapon box end at x=270) and the quests panel (x<=255)
+        col1 = 285
+        col2 = col1 + spacing
 
-        self.joystick = VirtualJoystick(margin + 70, screen_h - margin - 70, radius=55)
+        self.joystick = VirtualJoystick(margin + 75, screen_h - margin - 70, radius=55)
 
         attack_x = screen_w - margin - 50
         attack_y = screen_h - margin - 160
@@ -273,16 +277,16 @@ class TouchControls:
         potion_y = screen_h - margin - 130
         self.potion_btn = TouchButton(potion_x, potion_y, btn_r * 0.7, "POT", (60, 200, 60))
 
-        inv_x = margin + 70
-        inv_y = margin + 70
+        inv_x = col1
+        inv_y = margin + 75
         self.inventory_btn = TouchButton(inv_x, inv_y, btn_r * 0.8, "INV", (200, 180, 100))
 
-        craft_x = margin + 70 + spacing
-        craft_y = margin + 70
+        craft_x = col2
+        craft_y = margin + 75
         self.craft_btn = TouchButton(craft_x, craft_y, btn_r * 0.8, "CRF", (180, 140, 80))
 
-        mount_x = margin + 70
-        mount_y = margin + 70 + spacing
+        mount_x = col1
+        mount_y = margin + 75 + spacing
         self.mount_btn = TouchButton(mount_x, mount_y, btn_r * 0.7, "MNT", (150, 200, 255))
 
         storm_x = screen_w - margin - 50
@@ -297,37 +301,37 @@ class TouchControls:
         weapon_y = screen_h - margin - 200
         self.weapon_btn = TouchButton(weapon_x, weapon_y, btn_r * 0.75, "WPN", (255, 170, 60))
 
-        shop_x = margin + 70
-        shop_y = margin + 70 + spacing * 2
+        shop_x = col1
+        shop_y = margin + 75 + spacing * 2
         self.shop_btn = TouchButton(shop_x, shop_y, btn_r * 0.75, "SHP", (255, 200, 80))
 
-        build_x = margin + 70 + spacing
-        build_y = margin + 70 + spacing * 2
+        build_x = col2
+        build_y = margin + 75 + spacing * 2
         self.build_btn = TouchButton(build_x, build_y, btn_r * 0.75, "BLD", (140, 160, 220))
 
-        bp_x = margin + 70
-        bp_y = margin + 70 + spacing * 3
+        bp_x = col1
+        bp_y = margin + 75 + spacing * 3
         self.battlepass_btn = TouchButton(bp_x, bp_y, btn_r * 0.75, "BP", (255, 120, 200))
 
-        lobby_x = margin + 70 + spacing
-        lobby_y = margin + 70 + spacing * 3
+        lobby_x = col2
+        lobby_y = margin + 75 + spacing * 3
         self.lobby_btn = TouchButton(lobby_x, lobby_y, btn_r * 0.75, "LOB", (100, 200, 255))
 
-        achv_x = margin + 70
-        achv_y = margin + 70 + spacing * 4
+        achv_x = col1
+        achv_y = margin + 75 + spacing * 4
         self.achv_btn = TouchButton(achv_x, achv_y, btn_r * 0.75, "ACH", (255, 230, 120))
 
-        # WASD d-pad — right of the joystick, mirrors keyboard movement
-        self.w_btn = TouchButton(270, 565, 24, "W", (235, 235, 235))
-        self.a_btn = TouchButton(215, 620, 24, "A", (235, 235, 235))
-        self.s_btn = TouchButton(270, 675, 24, "S", (235, 235, 235))
-        self.d_btn = TouchButton(325, 620, 24, "D", (235, 235, 235))
+        # WASD d-pad — left of the toast/live-players zone, right of the joystick
+        self.w_btn = TouchButton(300, 575, 24, "W", (235, 235, 235))
+        self.a_btn = TouchButton(245, 630, 24, "A", (235, 235, 235))
+        self.s_btn = TouchButton(300, 685, 24, "S", (235, 235, 235))
+        self.d_btn = TouchButton(350, 630, 24, "D", (235, 235, 235))
 
         # Extra action buttons — left column rows 6-7
-        self.save_btn = TouchButton(margin + 70, margin + 70 + spacing * 5, btn_r * 0.7, "SAV", (120, 255, 200))
-        self.chat_btn = TouchButton(margin + 70 + spacing, margin + 70 + spacing * 5, btn_r * 0.7, "CHT", (200, 200, 255))
-        self.shot_btn = TouchButton(margin + 70, margin + 70 + spacing * 6, btn_r * 0.7, "SNP", (255, 160, 160))
-        self.lb_btn = TouchButton(margin + 70 + spacing, margin + 70 + spacing * 6, btn_r * 0.7, "LBD", (180, 160, 255))
+        self.save_btn = TouchButton(col1, margin + 75 + spacing * 5, btn_r * 0.7, "SAV", (120, 255, 200))
+        self.chat_btn = TouchButton(col2, margin + 75 + spacing * 5, btn_r * 0.7, "CHT", (200, 200, 255))
+        self.shot_btn = TouchButton(col1, margin + 75 + spacing * 6, btn_r * 0.7, "SNP", (255, 160, 160))
+        self.lb_btn = TouchButton(col2, margin + 75 + spacing * 6, btn_r * 0.7, "LBD", (180, 160, 255))
 
         self.all_buttons = [self.attack_btn, self.dodge_btn, self.special_btn,
                             self.interact_btn, self.potion_btn, self.inventory_btn,
@@ -338,7 +342,8 @@ class TouchControls:
                             self.d_btn, self.save_btn, self.chat_btn,
                             self.shot_btn, self.lb_btn]
 
-        self.menu_btn = TouchButton(screen_w // 2, margin + 30, btn_r * 0.7, "|||", (200, 200, 200))
+        # Top-right — centre-top belongs to the round banner / boss health bar
+        self.menu_btn = TouchButton(screen_w - 270, margin + 30, btn_r * 0.7, "|||", (200, 200, 200))
 
         self.keyboard = VirtualKeyboard(screen_w, screen_h)
 

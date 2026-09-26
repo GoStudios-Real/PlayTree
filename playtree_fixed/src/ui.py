@@ -119,21 +119,27 @@ class HUD:
         screen.blit(lbl, (mm_x + 5, mm_y + 2))
 
     def _draw_quest_tracker(self, screen):
+        # Top of the lower-left stack — sits between the weapon hint and the
+        # PETS panel so the joystick (y565+) never covers quest text.
         qx = 20
-        qy = HEIGHT - 200
-        pygame.draw.rect(screen, (15, 15, 30, 200), (qx, qy, 280, 180), border_radius=6)
-        pygame.draw.rect(screen, (60, 180, 80, 60), (qx, qy, 280, 180), border_radius=6, width=1)
+        qy = 300
+        pygame.draw.rect(screen, (15, 15, 30, 200), (qx, qy, 235, 178), border_radius=6)
+        pygame.draw.rect(screen, (60, 180, 80, 60), (qx, qy, 235, 178), border_radius=6, width=1)
         title = self.title_font.render("QUESTS", True, (100, 200, 120))
         screen.blit(title, (qx + 10, qy + 5))
         if hasattr(self.player, 'quests') and self.player.quests:
-            for i, quest in enumerate(self.player.quests[:3]):
+            # Accumulate y so a progress line never sits on the next quest name
+            cy = qy + 30
+            for quest in self.player.quests[:3]:
                 color = GOLD if quest.get("complete") else (200, 200, 200)
                 txt = f"{'[x]' if quest.get('complete') else '[ ]'} {quest['name']}"
                 surf = self.font.render(txt, True, color)
-                screen.blit(surf, (qx + 10, qy + 30 + i * 25))
+                screen.blit(surf, (qx + 10, cy))
+                cy += 24
                 if quest.get("progress"):
                     prog = self.font.render(f"  {quest['progress']}", True, (150, 150, 150))
-                    screen.blit(prog, (qx + 15, qy + 30 + i * 25 + 14))
+                    screen.blit(prog, (qx + 15, cy))
+                    cy += 24
         else:
             noq = self.font.render("No active quests", True, (120, 120, 130))
             screen.blit(noq, (qx + 10, qy + 40))
@@ -144,12 +150,13 @@ class HUD:
             py = HEIGHT - 230
             title = self.title_font.render("PETS", True, (100, 200, 120))
             screen.blit(title, (px, py))
+            nf = pygame.font.Font(None, 16)
             for i, pet in enumerate(self.player.creatures[:4]):
                 cx = px + 10 + i * 45
                 cy = py + 25
                 pygame.draw.circle(screen, pet.get("color", (255, 140, 60)), (cx, cy), 10)
                 pygame.draw.circle(screen, (*pet.get("color", (255, 140, 60))[:3], 60), (cx, cy), 14, 2)
-                name = self.font.render(pet["name"][:6], True, (200, 200, 200))
+                name = nf.render(pet["name"][:5], True, (200, 200, 200))
                 screen.blit(name, (cx - 15, cy + 14))
 
     def _draw_resources(self, screen):

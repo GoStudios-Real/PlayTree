@@ -155,9 +155,9 @@ class Game:
         self.go_live_ts = get_go_live_ts(GO_LIVE_DAYS, FORCE_LIVE)
         self.is_live = bool(FORCE_LIVE) or time.time() >= self.go_live_ts
         self.go_live_synced = False
-        # Offline by default — no background network. Set PLAYTREE_ONLINE=1 to
-        # sync the timestamp from the website (config.GO_LIVE_EPOCH already wins).
-        if not FORCE_LIVE and os.environ.get("PLAYTREE_ONLINE") and not os.environ.get("PLAYTREE_OFFLINE"):
+        # Offline by default — no background network. Toggle Online Mode in
+        # Settings (or set PLAYTREE_ONLINE=1) to sync with the website.
+        if not FORCE_LIVE and self._network_enabled():
             threading.Thread(target=self._fetch_go_live, daemon=True).start()
         self._live_announced = False
         self.npcs = []
@@ -614,6 +614,15 @@ class Game:
             getattr(self.screenshot_sys, 'share_menu_open', False),
         ])
 
+    def _network_enabled(self):
+        """Online mode: Settings toggle or PLAYTREE_ONLINE=1 env opt-in.
+        PLAYTREE_OFFLINE=1 always wins (used by tests/CI)."""
+        if os.environ.get("PLAYTREE_OFFLINE"):
+            return False
+        if os.environ.get("PLAYTREE_ONLINE"):
+            return True
+        return bool(self.settings.get("online_mode", False))
+
     def go_live_str(self):
         if self.is_live:
             return "LIVE"
@@ -677,8 +686,8 @@ class Game:
     def _check_for_updates(self):
         """Query GitHub for the latest commit — offline by default, opt-in with PLAYTREE_ONLINE=1."""
         ul = self.update_log
-        if not (os.environ.get("PLAYTREE_ONLINE") and not os.environ.get("PLAYTREE_OFFLINE")):
-            ul.status_line = f"Offline mode — running v{VERSION}. Set PLAYTREE_ONLINE=1 to check GitHub."
+        if not self._network_enabled():
+            ul.status_line = f"Offline mode — running v{VERSION}. Enable Online Mode in Settings."
             self.audio.play("menu_hover")
             return
         ul.status_line = "Checking GitHub..."
@@ -1558,6 +1567,79 @@ class Game:
                 return
         self.show_message("No wild creatures nearby...", 2)
 
+    def _melee_attack_hits(self):
+        """Resolve a melee swing (left click / controller A / touch ATK) against
+        every entity type — guns skip this and use projectiles instead."""
+        p = self.player
+        melee_range = max(35, p.weapon.get("range", 30))
+        dmg = p.attack_power + p.weapon.get("damage", 0)
+
+        # Basic enemies (arc-limited)
+        hits = CombatSystem.check_attack(p.x, p.y, melee_range, p.facing,
+                                         self.enemies, dmg)
+        for enemy, dead in hits:
+            if dead:
+                p.add_xp(25)
+                self.quests.update_progress("defeat", "enemy")
+                self._drop_gold(enemy.x, enemy.y)
+                self.enemies.remove(enemy)
+                self.round_enemies_killed += 1
+                p.particles.burst(enemy.x, enemy.y, GOLD, 15, 4, 30, 5)
+                self._spawn_new_enemy()
+                self.combo_display += 1
+                self.combo_display_timer = 2
+            else:
+                self.damage_numbers.append({"x": enemy.x, "y": enemy.y,
+                                            "text": str(dmg), "timer": 1,
+                                            "color": (255, 200, 50)})
+
+        # Expanded enemies (arc-limited, with drop table)
+        hits = CombatSystem.check_attack(p.x, p.y, melee_range, p.facing,
+                                         self.expanded_enemies, dmg)
+        for eenemy, dead in hits:
+            self.damage_numbers.append({"x": eenemy.x, "y": eenemy.y - 15,
+                                        "text": str(dmg), "timer": 1,
+                                        "color": (255, 200, 50)})
+            if dead:
+                p.add_xp(eenemy.xp_reward)
+                self.quests.update_progress("defeat", "enemy")
+                for drop in eenemy.get_drops():
+                    p.inventory["resources"][drop] = p.inventory["resources"].get(drop, 0) + 1
+                self.audio.play("collect")
+                self._drop_gold(eenemy.x, eenemy.y)
+                self.expanded_enemies.remove(eenemy)
+                self.round_enemies_killed += 1
+                p.particles.burst(eenemy.x, eenemy.y, GOLD, 15, 4, 30, 5)
+                self.combo_display += 1
+                self.combo_display_timer = 2
+
+        # Astro Toilets (radius)
+        for astro in self.astro_toilets[:]:
+            if math.hypot(astro.x - p.x, astro.y - p.y) < melee_range + astro.size:
+                if astro.take_damage(dmg):
+                    self.astro_toilets.remove(astro)
+                    p.add_xp(40)
+                    self._drop_gold(astro.x, astro.y)
+                    self.round_enemies_killed += 1
+                    self.quests.update_progress("defeat", "astro")
+                    p.particles.burst(astro.x, astro.y, (180, 200, 255), 18, 4, 30, 5)
+                    self.camera_shake = 2
+                else:
+                    self.damage_numbers.append({"x": astro.x, "y": astro.y - 12,
+                                                "text": str(dmg), "timer": 1,
+                                                "color": (180, 220, 255)})
+
+        # Bosses (radius)
+        for boss in self.bosses:
+            if boss.active and math.hypot(boss.x - p.x, boss.y - p.y) < melee_range + boss.size:
+                boss.take_damage(dmg)
+                self.damage_numbers.append({"x": boss.x, "y": boss.y - 20,
+                                            "text": str(dmg), "timer": 1,
+                                            "color": (255, 100, 100)})
+                self.camera_shake = 2
+                if not boss.active:
+                    self._on_boss_defeated(boss)
+
     def _use_skill(self, skill_name):
         if skill_name not in self.player.skills:
             return
@@ -1568,54 +1650,9 @@ class Game:
         self.player.energy -= skill["energy_cost"]
 
         if skill_name == "attack":
+            # Queue the swing — _melee_attack_hits() resolves it in update()
+            # (same path as controller/touch attacks, single sound + single hit pass)
             self.player._attack(pygame.mouse.get_pos(), self.camera_x, self.camera_y)
-            hits = CombatSystem.check_attack(self.player.x, self.player.y, 35,
-                                             self.player.facing, self.enemies, self.player.attack_power)
-            for enemy, dead in hits:
-                if dead:
-                    self.player.add_xp(25)
-                    self.quests.update_progress("defeat", "enemy")
-                    self._drop_gold(enemy.x, enemy.y)
-                    self.enemies.remove(enemy)
-                    self.round_enemies_killed += 1
-                    self.player.particles.burst(enemy.x, enemy.y, GOLD, 15, 4, 30, 5)
-                    self._spawn_new_enemy()
-                    self.combo_display += 1
-                    self.combo_display_timer = 2
-                else:
-                    self.damage_numbers.append({"x": enemy.x, "y": enemy.y,
-                                               "text": str(self.player.attack_power), "timer": 1,
-                                                "color": (255, 200, 50)})
-
-            # Astro Toilets — Skibidi
-            for astro in self.astro_toilets[:]:
-                dx = astro.x - self.player.x; dy = astro.y - self.player.y
-                if math.hypot(dx,dy) < 48:
-                    if astro.take_damage(self.player.attack_power):
-                        self.astro_toilets.remove(astro)
-                        self.player.add_xp(40); self._drop_gold(astro.x, astro.y)
-                        self.round_enemies_killed+=1; self.quests.update_progress("defeat","astro")
-                        self.player.particles.burst(astro.x, astro.y, (180,200,255), 18, 4, 30, 5)
-                        self.camera_shake=2
-                    else:
-                        self.damage_numbers.append({"x":astro.x,"y":astro.y-12,"text":str(self.player.attack_power),"timer":1,"color":(180,220,255)})
-
-            # Also check boss hits
-            for boss in self.bosses:
-                if boss.active:
-                    dx = boss.x - self.player.x
-                    dy = boss.y - self.player.y
-                    dist = math.sqrt(dx * dx + dy * dy)
-                    if dist < 50:
-                        boss.take_damage(self.player.attack_power)
-                        self.damage_numbers.append({"x": boss.x, "y": boss.y - 20,
-                                                   "text": str(self.player.attack_power), "timer": 1,
-                                                    "color": (255, 100, 100)})
-                        self.camera_shake = 2
-                        if not boss.active:
-                            self._on_boss_defeated(boss)
-
-            self.audio.play("attack")
         elif skill_name == "dodge":
             pass
         elif skill_name == "special":
@@ -1855,20 +1892,8 @@ class Game:
         res = self.player.inventory.setdefault("resources", {})
         res["Gold Leaves"] = res.get("Gold Leaves", 0) + gold
         self.damage_numbers.append({"x": x, "y": y - 20,
-                                   "text": f"+{gold} Gold", "timer": 1.5,
+                                    "text": f"+{gold} Gold", "timer": 1.5,
                                     "color": GOLD})
-
-        # FIX: always show messages (was incorrectly nested in SETTINGS)
-        if self.message_timer > 0:
-            try:
-                font = pygame.font.SysFont(None, 24)
-                txt = font.render(self.message, True, WHITE)
-                bg = pygame.Surface((txt.get_width() + 20, txt.get_height() + 10), pygame.SRCALPHA)
-                bg.fill((0, 0, 0, 160))
-                self.screen.blit(bg, (WIDTH // 2 - bg.get_width() // 2, 20))
-                self.screen.blit(txt, (WIDTH // 2 - txt.get_width() // 2, 25))
-            except BaseException:
-                pass
 
     def update(self, dt):
         self.dt = dt
@@ -1962,8 +1987,11 @@ class Game:
             self.credits_timer += dt
 
         elif self.state == GameState.PLAYING and self.player:
-            self.player.update(dt, keys, mouse_buttons, mouse_pos, self.world,
-                               self.camera_x, self.camera_y)
+            # No swinging while a GUI/dialogue/textbox is up — clicks belong to it
+            gui_busy = (self._any_overlay_open() or self.dialogue_box.active
+                        or getattr(self.multiplayer, "typing_chat", False))
+            self.player.update(dt, keys, (0, 0, 0) if gui_busy else mouse_buttons,
+                               mouse_pos, self.world, self.camera_x, self.camera_y)
 
             if self.player.just_dodged:
                 self.audio.play("dodge")
@@ -2000,12 +2028,11 @@ class Game:
 
                 # Controller buttons
                 btns = ctrl["buttons"]
-                if btns.get(0):  # A button - attack
+                if btns.get(0) and not self._any_overlay_open():  # A button - attack
                     if self.player.attack_timer <= 0:
                         mouse_pos_ctrl = (WIDTH // 2 + int(math.cos(self.player.facing) * 100),
                                           HEIGHT // 2 + int(math.sin(self.player.facing) * 100))
                         self.player._attack(mouse_pos_ctrl, self.camera_x, self.camera_y)
-                        self.audio.play("attack")
                 if btns.get(1):  # B button - dodge
                     if self.player.dodge_cooldown <= 0 and not self.player.dodging and self.player.energy >= 10:
                         self.player.dodging = True
@@ -2050,11 +2077,11 @@ class Game:
                     self.player.x += tx * self.player.speed
                     self.player.y += ty * self.player.speed
                     self.player.facing = math.atan2(ty, tx)
-                if self.touch_controls.attack_btn.is_pressed() and self.player.attack_timer <= 0:
+                if self.touch_controls.attack_btn.is_pressed() and self.player.attack_timer <= 0 \
+                        and not self._any_overlay_open():
                     mouse_pos_t = (WIDTH // 2 + int(math.cos(self.player.facing) * 100),
                                    HEIGHT // 2 + int(math.sin(self.player.facing) * 100))
                     self.player._attack(mouse_pos_t, self.camera_x, self.camera_y)
-                    self.audio.play("attack")
                 if self.touch_controls.dodge_btn.just_pressed():
                     if self.player.dodge_cooldown <= 0 and not self.player.dodging and self.player.energy >= 10:
                         self.player.dodging = True
@@ -2127,6 +2154,14 @@ class Game:
             if self.camera_shake > 0:
                 self.camera_x += random.uniform(-self.camera_shake, self.camera_shake) * 2
                 self.camera_y += random.uniform(-self.camera_shake, self.camera_shake) * 2
+
+            # Resolve the queued attack: sound + melee hits for non-guns
+            # (guns already spawned a projectile in Player._attack)
+            if getattr(self.player, "pending_attack", False):
+                self.player.pending_attack = False
+                self.audio.play("attack")
+                if self.player.weapon.get("type") != "gun":
+                    self._melee_attack_hits()
 
             # Update enemies
             for enemy in self.enemies[:]:
@@ -2560,10 +2595,12 @@ class Game:
             self._draw_settings()
 
             if self.message_timer > 0:
+                # Empty strip below the panel — the old spot (HEIGHT-120) sat
+                # on the bottom CONTROLS row
                 alpha = int(255 * min(1, self.message_timer))
                 msg_font = pygame.font.Font(None, 28)
                 msg_surf = msg_font.render(self.message, True, (*GREEN_GLOW[:3], alpha))
-                msg_rect = msg_surf.get_rect(center=(WIDTH // 2, HEIGHT - 120))
+                msg_rect = msg_surf.get_rect(center=(WIDTH // 2, HEIGHT - 30))
                 bg = pygame.Surface((msg_surf.get_width() + 20, msg_surf.get_height() + 10), pygame.SRCALPHA)
                 bg.fill((10, 15, 10, min(180, alpha)))
                 self.screen.blit(bg, (msg_rect.x - 10, msg_rect.y - 5))
@@ -2585,7 +2622,8 @@ class Game:
             if self.state == GameState.MAIN_MENU:
                 hx, hy = WIDTH // 2 - hint.get_width() // 2, HEIGHT - 14
             else:
-                hx, hy = WIDTH - hint.get_width() - 12, HEIGHT - 14
+                # Gameplay: above the multiplayer status block in the corner
+                hx, hy = WIDTH - hint.get_width() - 12, HEIGHT - 70
             self.screen.blit(hint, (hx, hy))
 
         # Toast for messages triggered while an overlay covers the world (shop/marketplace/etc.)
@@ -2711,7 +2749,8 @@ class Game:
         mx, my = pos
         # must match _draw_settings geometry: iy = 130 + i*45, rows 35px tall
         settings_items = ["music_volume", "sfx_volume", "fullscreen", "show_fps",
-                          "screen_shake", "show_damage_numbers", "auto_collect"]
+                          "screen_shake", "show_damage_numbers", "auto_collect",
+                          "online_mode"]
         for i, key in enumerate(settings_items):
             iy = 130 + i * 45
             if not (90 <= mx <= 1190 and iy <= my <= iy + 35):
@@ -2731,6 +2770,10 @@ class Game:
                         pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
                     else:
                         pygame.display.set_mode((WIDTH, HEIGHT))  # FIX: keep render_surface as Game.screen
+                elif key == "online_mode" and self.settings[key] and not FORCE_LIVE:
+                    if not os.environ.get("PLAYTREE_OFFLINE"):
+                        threading.Thread(target=self._fetch_go_live, daemon=True).start()
+                        self.update_log.status_line = "Online Mode on — checking GitHub..."
         save_settings(self.settings)
 
         # Sign Out button (matches draw: sx+sw-160, sy+sh-45)
@@ -2742,7 +2785,8 @@ class Game:
     def _handle_settings_hover(self, pos):
         self.settings_hover = -1
         settings_items = ["music_volume", "sfx_volume", "fullscreen", "show_fps",
-                          "screen_shake", "show_damage_numbers", "auto_collect"]
+                          "screen_shake", "show_damage_numbers", "auto_collect",
+                          "online_mode"]
         for i, key in enumerate(settings_items):
             iy = 130 + i * 45
             if 90 <= pos[0] <= 1190 and iy <= pos[1] <= iy + 35:
@@ -2956,38 +3000,42 @@ class Game:
             cs = cf.render(combo_text, True, GOLD)
             self.screen.blit(cs, (WIDTH // 2 - cs.get_width() // 2, HEIGHT - 140))
 
-        # Round progress display
+        # Round progress display — top-centre (x440) so it clears the HP/Energy
+        # bars on the left and the pause button (now top-right). Hidden while the
+        # centred boss health bar is up — both can't own centre-top at once.
         if self.state == GameState.PLAYING and self.round_active and self.player:
             rd = self.round_data.get(self.current_round, {})
             needed = rd.get("enemies_needed", 10)
             rf = pygame.font.Font(None, 22)
-            round_label = rf.render(f"Round {self.current_round}/{self.max_rounds}: {rd.get('name', '')}", True, GOLD)
-            self.screen.blit(round_label, (10, 10))
-            prog = min(self.round_enemies_killed, needed)
-            prog_text = f"Enemies: {prog}/{needed}"
-            if self.round_boss_spawned and not self.round_boss_defeated:
-                prog_text = ">>> BOSS <<<"
-                prog_color = RED
-            else:
-                prog_color = GREEN_GLOW if prog >= needed else (180, 180, 180)
-            ps = rf.render(prog_text, True, prog_color)
-            self.screen.blit(ps, (10, 30))
-            bar_w = 150
-            bar_h = 6
-            bar_x = 10
-            bar_y = 50
-            pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_w, bar_h))
-            fill_w = int(bar_w * min(self.round_enemies_killed / max(1, needed), 1.0))
-            fill_color = GREEN_GLOW if not self.round_boss_spawned else RED
-            pygame.draw.rect(self.screen, fill_color, (bar_x, bar_y, fill_w, bar_h))
+            if not self.boss_health_bar.visible:
+                round_label = rf.render(f"Round {self.current_round}/{self.max_rounds}: {rd.get('name', '')}", True, GOLD)
+                self.screen.blit(round_label, (440, 6))
+                prog = min(self.round_enemies_killed, needed)
+                prog_text = f"Enemies: {prog}/{needed}"
+                if self.round_boss_spawned and not self.round_boss_defeated:
+                    prog_text = ">>> BOSS <<<"
+                    prog_color = RED
+                else:
+                    prog_color = GREEN_GLOW if prog >= needed else (180, 180, 180)
+                ps = rf.render(prog_text, True, prog_color)
+                self.screen.blit(ps, (440, 34))
+                bar_w = 150
+                bar_h = 6
+                bar_x = 440
+                bar_y = 62
+                pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_w, bar_h))
+                fill_w = int(bar_w * min(self.round_enemies_killed / max(1, needed), 1.0))
+                fill_color = GREEN_GLOW if not self.round_boss_spawned else RED
+                pygame.draw.rect(self.screen, fill_color, (bar_x, bar_y, fill_w, bar_h))
 
-            if self.new_game_plus.ngp_level > 0:
-                ngp_f = pygame.font.Font(None, 18)
-                ngp_s = ngp_f.render(
-                    f"NG+{self.new_game_plus.ngp_level} | x{self.new_game_plus.multiplier:.1f} enemy HP", True, MAGIC_PURPLE)
-                self.screen.blit(ngp_s, (10, 62))
+                if self.new_game_plus.ngp_level > 0:
+                    ngp_f = pygame.font.Font(None, 18)
+                    ngp_s = ngp_f.render(
+                        f"NG+{self.new_game_plus.ngp_level} | x{self.new_game_plus.multiplier:.1f} enemy HP", True, MAGIC_PURPLE)
+                    self.screen.blit(ngp_s, (600, 46))
 
-            self.pet_manager.draw_pet_bar(self.screen, self.player.creatures, HEIGHT - 100)
+            # Pet cooldown bars removed — the PETS panel above the joystick
+            # already shows the party, and the old row sat on the joystick.
 
         # Chat display
         if self.state == GameState.PLAYING:
@@ -3003,29 +3051,29 @@ class Game:
             ds.set_alpha(alpha)
             self.screen.blit(ds, (dx, dy))
 
-        # Season event indicator
+        # Season event indicator — top-left free zone (below weapon hint, above quests)
         if self.season.event_active:
             ef = pygame.font.Font(None, 22)
             event_text = f"Event: {self.season.event_type}"
             es = ef.render(event_text, True, (255, 200, 100))
-            pygame.draw.rect(self.screen, (30, 20, 10, 180), (10, HEIGHT -
-                             130, es.get_width() + 20, 30), border_radius=4)
-            self.screen.blit(es, (20, HEIGHT - 125))
+            pygame.draw.rect(self.screen, (30, 20, 10, 180), (20, 247,
+                             es.get_width() + 20, 30), border_radius=4)
+            self.screen.blit(es, (30, 252))
 
-        # Storm indicator
+        # Storm indicator — same free zone, above the season event box
         if self.storm.active:
             sf = pygame.font.Font(None, 26)
             t_left = max(0, self.storm.timer)
             intensity_bar = int(40 * self.storm.intensity)
             storm_text = f"STORM {int(t_left)}s"
             sts = sf.render(storm_text, True, (100, 150, 255))
-            pygame.draw.rect(self.screen, (10, 15, 35, 200), (10, HEIGHT -
-                             160, sts.get_width() + 30, 30), border_radius=4)
-            pygame.draw.rect(self.screen, (60, 100, 200, 100), (10, HEIGHT - 160,
-                             sts.get_width() + 30, 30), border_radius=4, width=1)
-            self.screen.blit(sts, (25, HEIGHT - 157))
-            bar_x = 25
-            bar_y = HEIGHT - 135
+            pygame.draw.rect(self.screen, (10, 15, 35, 200), (20, 205,
+                             sts.get_width() + 30, 32), border_radius=4)
+            pygame.draw.rect(self.screen, (60, 100, 200, 100), (20, 205,
+                             sts.get_width() + 30, 32), border_radius=4, width=1)
+            self.screen.blit(sts, (35, 208))
+            bar_x = 35
+            bar_y = 230
             pygame.draw.rect(self.screen, (30, 30, 50), (bar_x, bar_y, 42, 6), border_radius=3)
             pygame.draw.rect(self.screen, (80, 130, 220), (bar_x, bar_y, intensity_bar, 6), border_radius=3)
 
@@ -3150,14 +3198,15 @@ class Game:
 
         mf = pygame.font.Font(None, 20)
         ms = mf.render(f"[M] Mount: {name} ({status})", True, color)
-        self.screen.blit(ms, (WIDTH // 2 - ms.get_width() // 2, HEIGHT - 75))
+        # Bottom-centre stack: combo(580-616) -> mount(618) -> hint(641) -> LIVE(663)
+        self.screen.blit(ms, (WIDTH // 2 - ms.get_width() // 2, HEIGHT - 102))
 
         if self.mounts_unlocked:
             if self.controller_connected:
-                xbox_icons.draw_menu_prompt(self.screen, [("LT", "M", "Mount"), ("LS", "R", "Sprint")], HEIGHT - 58)
+                xbox_icons.draw_menu_prompt(self.screen, [("LT", "M", "Mount"), ("LS", "R", "Sprint")], HEIGHT - 79)
             else:
                 hint = mf.render("N/B to cycle  |  M to mount/dismount  |  R to sprint", True, (80, 120, 80))
-                self.screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 58))
+                self.screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 79))
 
     def _draw_inventory(self):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -3344,7 +3393,8 @@ class Game:
         sf_xs = pygame.font.Font(None, 18)
 
         settings_items = ["music_volume", "sfx_volume", "fullscreen", "show_fps",
-                          "screen_shake", "show_damage_numbers", "auto_collect"]
+                          "screen_shake", "show_damage_numbers", "auto_collect",
+                          "online_mode"]
         for i, key in enumerate(settings_items):
             iy = sy + 70 + i * 45
             is_hov = i == getattr(self, 'settings_hover', -1)
@@ -3372,7 +3422,7 @@ class Game:
                 vs = sf.render(on_off, True, color)
                 self.screen.blit(vs, (sx + sw - 120, iy + 6))
 
-        ctrl_y = sy + sh - 200
+        ctrl_y = sy + sh - 170  # 8th settings row (online_mode) ends at 480
         ch = sf_sm.render("CONTROLS", True, GOLD)
         self.screen.blit(ch, (sx + 20, ctrl_y))
         controls = DEFAULT_SETTINGS["controls"]
@@ -4068,8 +4118,10 @@ class Game:
     def _draw_gameplay_chat(self):
         if not self.multiplayer.connected:
             return
-        chat_x = 10
-        chat_y = HEIGHT - 180
+        # Right side under the minimap — the old spot (10,540) sat on the
+        # joystick, d-pad and PETS panel
+        chat_x = 740
+        chat_y = 240
         chat_w = 300
         chat_h = 120
 
