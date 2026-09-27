@@ -79,9 +79,9 @@ export const CONFIG = {
 
 export const QUALITY_PRESETS = {
   low:    { renderDistance: 3, pixelRatio: 0.6, shadows: false, particles: 0.4, clouds: false, ao: false, grassDetail: 0.5, waterReflections: false, foliageDensity: 0.7 },
-  medium: { renderDistance: 5, pixelRatio: 1.0, shadows: true,  particles: 0.7, clouds: true,  ao: true,  grassDetail: 1.0, waterReflections: false, foliageDensity: 1.0 },
-  high:   { renderDistance: 7, pixelRatio: 1.25, shadows: true, particles: 1.0, clouds: true, ao: true, grassDetail: 1.5, waterReflections: true, foliageDensity: 1.0 },
-  ultra:  { renderDistance: 9, pixelRatio: 1.5, shadows: true,  particles: 1.2, clouds: true, ao: true, grassDetail: 2.0, waterReflections: true, foliageDensity: 1.0 },
+  medium: { renderDistance: 5, pixelRatio: 1.0, shadows: false,  particles: 0.7, clouds: true,  ao: true,  grassDetail: 1.0, waterReflections: false, foliageDensity: 1.0 },
+  high:   { renderDistance: 7, pixelRatio: 1.25, shadows: false, particles: 1.0, clouds: true, ao: true, grassDetail: 1.5, waterReflections: true, foliageDensity: 1.0 },
+  ultra:  { renderDistance: 9, pixelRatio: 1.5, shadows: false,  particles: 1.2, clouds: true, ao: true, grassDetail: 2.0, waterReflections: true, foliageDensity: 1.0 },
 };
 
 export default CONFIG;

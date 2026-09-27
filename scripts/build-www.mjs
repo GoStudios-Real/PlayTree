@@ -13,5 +13,7 @@ mkdirSync(www, { recursive: true });
 cpSync(join(root, "index.html"), join(www, "index.html"));
 cpSync(join(root, "assets"), join(www, "assets"), { recursive: true });
 cpSync(join(root, "src"), join(www, "src"), { recursive: true });
+// three.module.js lives in vendor/ and is imported by src/core/Engine.js.
+cpSync(join(root, "vendor"), join(www, "vendor"), { recursive: true });
 
 console.log("www/ built");

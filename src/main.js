@@ -132,10 +132,27 @@ function boot() {
   ui.open('mainmenu');
   events.emit('boot:done', { game });
 
-  // touch devices
-  if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) {
+  // Touch devices (phones/tablets — not touchscreen laptops)
+  if (engine.isMobile) {
     touch.enable();
+    // The in-game menu covers Profile/Store/Servers; shell chrome would only
+    // overlap the HUD on a phone.
+    document.getElementById('topNav')?.classList.add('hidden');
+    document.getElementById('goLive')?.classList.add('hidden');
   }
+
+  // Browsers (and Android WebView) require a user gesture before audio.
+  const unlockAudio = () => {
+    engine.audio.init();
+    const s = engine.settings;
+    engine.audio.setVolumes(s.get('volume'), s.get('sfxVolume'), s.get('musicVolume'));
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('touchstart', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
 
   engine.start();
 }

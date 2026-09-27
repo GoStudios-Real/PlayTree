@@ -746,6 +746,8 @@ label { font-size: 13px; color: var(--pt-ink-dim); display: block; margin-bottom
 .tc-jump { right: 22px; bottom: 150px; }
 .tc-mine { right: 84px; bottom: 150px; }
 .tc-place { right: 22px; bottom: 214px; }
+.tc-menu { left: calc(50% - 54px); top: 8px; width: 44px; height: 44px; font-size: 17px; }
+.tc-inv { left: calc(50% + 10px); top: 8px; width: 44px; height: 44px; font-size: 17px; }
 
 /* ---------- Emote wheel (new layout) ---------- */
 .ew-wrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 300px; }

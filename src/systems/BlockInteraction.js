@@ -138,6 +138,7 @@ export class BlockInteraction {
       const c = block.colors.all || block.colors.top || [0.6, 0.6, 0.6];
       this.engine.particles?.spawn(x + 0.5, y + 0.5, z + 0.5, { count: 14, color: c, speed: 4, life: 0.7 });
       events.emit('block:broken', { x, y, z, id, collected: allCollected });
+      this.player?.game?.xp?.addStat?.('blocksMined');
     }
     this.lastBreak = performance.now();
   }
@@ -194,6 +195,7 @@ export class BlockInteraction {
     const c = getBlock(blockId).colors.all || getBlock(blockId).colors.top || [0.6, 0.6, 0.6];
     this.engine.particles?.spawn(bx + 0.5, by + 0.5, bz + 0.5, { count: 6, color: c, speed: 2, life: 0.4 });
     events.emit('block:placed', { x: bx, y: by, z: bz, blockId });
+    this.player?.game?.xp?.addStat?.('blocksPlaced');
     return true;
   }
 

@@ -36,9 +36,17 @@ export const DEFAULT_SETTINGS = {
 export class Settings {
   constructor(engine) {
     this.engine = engine;
-    this.values = { ...DEFAULT_SETTINGS, ...(Storage.get(SETTINGS_KEY) || {}) };
+    const saved = Storage.get(SETTINGS_KEY);
+    this.values = { ...DEFAULT_SETTINGS, ...(saved || {}) };
+    // First run on a phone (Nokia G21/G22 class): start on the low preset —
+    // Mali-G57 MP1 cannot afford medium's render distance + pixel ratio.
+    if (!saved && Settings.isMobileDevice()) this.values.quality = 'low';
     this.qualityPreset = this.values.quality;
     this.applyQuality();
+  }
+
+  static isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   }
 
   get(key) {
@@ -76,6 +84,7 @@ export class Settings {
   }
 
   isLowEnd() {
+    if (Settings.isMobileDevice()) return true;
     const cores = (navigator.hardwareConcurrency || 4);
     const mem = (navigator.deviceMemory || 4);
     return cores <= 4 && mem <= 4;

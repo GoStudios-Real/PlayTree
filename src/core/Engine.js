@@ -29,10 +29,14 @@ export class Engine {
 
   init() {
     const app = document.getElementById('app');
+    // Nokia G21/G22 and friends: Unisoc T606 (Mali-G57 MP1) is fill-rate
+    // bound — no MSAA, capped pixel ratio, shadows off via quality presets.
+    this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 0 && !window.matchMedia('(pointer: fine)').matches);
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'webgl';
     app.appendChild(this.canvas);
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: !this.isMobile, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -52,6 +56,21 @@ export class Engine {
 
     document.addEventListener('pointerlockchange', this.input.onPointerLockChange);
     window.addEventListener('resize', () => this.resize());
+    // Settings changes must re-apply to the renderer (pixel ratio, fog, shadows).
+    events.on('quality:changed', () => this.applyQuality());
+    // Stop rendering while backgrounded (battery + thermal on phones).
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this.running) {
+          this.running = false;
+          this._resumeAfterHide = true;
+          if (this._raf) cancelAnimationFrame(this._raf);
+        }
+      } else if (this._resumeAfterHide) {
+        this._resumeAfterHide = false;
+        this.start();
+      }
+    });
 
     // Helpers
     this.ambient = new THREE.HemisphereLight(0xcfe8ff, 0x6b7d4f, 0.9);
@@ -67,6 +86,7 @@ export class Engine {
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
     this.sceneReady = true;
+    this.resize();
     this.applyQuality();
     events.emit('engine:ready', this);
     return this;

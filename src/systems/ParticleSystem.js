@@ -94,8 +94,10 @@ export class ParticleSystem {
     }
     this.count = alive;
     this.geo.setDrawRange(0, this.count);
-    this.geo.attributes.position.needsUpdate = true;
-    this.geo.attributes.color.needsUpdate = true;
+    if (this.count > 0) {
+      this.geo.attributes.position.needsUpdate = true;
+      this.geo.attributes.color.needsUpdate = true;
+    }
   }
 
   setEnabled(v) {

@@ -15,6 +15,7 @@ import { FarmingSystem } from '../systems/FarmingSystem.js';
 import { QuestSystem } from '../systems/QuestSystem.js';
 import { XPProgress } from '../systems/XPProgress.js';
 import { AchievementSystem } from '../systems/AchievementSystem.js';
+import { DailyQuestSystem } from '../systems/DailyQuestSystem.js';
 import { DayNightCycle } from '../systems/DayNightCycle.js';
 import { WeatherSystem } from '../systems/WeatherSystem.js';
 import { ChatSystem } from '../systems/ChatSystem.js';
@@ -53,6 +54,8 @@ export class Game {
     this.store = new StoreSystem(this);
     this.social.login('Sprout', '1');
     this.store.addCoins(0);
+    this.achievements = new AchievementSystem(this);
+    this.dailies = new DailyQuestSystem(this);
 
     engine.addUpdater((dt, t) => this.update(dt, t), 10);
   }
@@ -356,8 +359,57 @@ export class Game {
     // Save world edits periodically
     if (this.frameCount % 300 === 0) this.world.saveEdits();
 
+    // HUD refresh (throttled — minimap samples the world each pass)
+    this._hudAcc = (this._hudAcc || 0) + dt;
+    if (this._hudAcc >= 0.1) {
+      this._hudAcc = 0;
+      this.ui?.updateHUD?.(0.1);
+      this._updateTracker();
+    }
+
     // Damage vignette decay
     this.ui?.updateVignette?.(dt);
+  }
+
+  // Compose the HUD quest tracker: first active story quest + open dailies.
+  _updateTracker() {
+    const ui = this.ui;
+    if (!ui) return;
+    const objectives = [];
+    let title = null;
+    let desc = null;
+    const q = this.quests?.active?.[0];
+    if (q) {
+      title = q.def.title;
+      desc = q.def.desc;
+      q.def.objectives.forEach((o, i) => {
+        objectives.push({ desc: this._objectiveDesc(o), current: this.quests._getCount(q.id, i), count: o.count });
+      });
+    }
+    for (const d of (this.dailies?.summary?.() || [])) {
+      if (!d.done) objectives.push({ desc: `☀ ${d.desc}`, current: d.current, count: d.count });
+    }
+    if (!objectives.length) { ui.setQuestTracker(null); return; }
+    ui.setQuestTracker({
+      title: title || 'Daily Quests',
+      desc: desc || 'Fresh quests every day',
+      objectives,
+    });
+  }
+
+  _objectiveDesc(o) {
+    switch (o.type) {
+      case 'mine': return `Mine ${getBlock(o.target)?.name || 'blocks'} (${o.count})`;
+      case 'place': return `Place ${getBlock(o.target)?.name || 'blocks'} (${o.count})`;
+      case 'craft': return `Craft ${getItem(o.target)?.name || 'items'} (${o.count})`;
+      case 'collect': return `Collect ${getItem(o.target)?.name || 'items'} (${o.count})`;
+      case 'kill': return `Defeat ${o.target} (${o.count})`;
+      case 'talk': return `Talk to ${o.target}`;
+      case 'explore': return `Reach ${o.target}`;
+      case 'plant': return `Plant ${getItem(o.target)?.name || 'seeds'} (${o.count})`;
+      case 'harvest': return `Harvest ${getBlock(o.target)?.name || 'crops'} (${o.count})`;
+      default: return `${o.type} (${o.count})`;
+    }
   }
 
   updateBots(dt) {
@@ -396,8 +448,17 @@ export class Game {
   resume() {
     if (this.state !== 'paused') return;
     this.state = 'playing';
-    this.engine.input.requestPointerLock(this.engine.canvas);
+    if (!this.engine.isMobile) this.engine.input.requestPointerLock(this.engine.canvas);
     events.emit('game:resumed');
+  }
+
+  // UI screens (inventory/map/quests/settings/pause/emote) call these.
+  setPaused(b) { b ? this.pause() : this.resume(); }
+
+  saveWorld() {
+    if (this.world) this.world.saveEdits();
+    events.emit('world:saved');
+    this.ui?.toast('World saved', 1800);
   }
 
   // Interact with NPC / chest
