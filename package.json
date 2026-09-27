@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "playtree-chapter1-season1",
   "version": "1.0.0",
   "description": "PlayTree - Chapter I: Season I. An original sandbox-adventure game platform.",
@@ -10,7 +10,10 @@
     "dev": "node server/server.mjs --watch",
     "test": "node tests/run-tests.mjs",
     "check": "node scripts/check-syntax.mjs && node scripts/check-exports.mjs",
-    "dist": "electron-builder --win --x64 --publish never"
+    "dist": "electron-builder --win --x64 --publish never",
+    "build:www": "node scripts/build-www.mjs",
+    "android:sync": "npm run build:www && cap sync android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleRelease"
   },
   "engines": {
     "node": ">=18"
@@ -47,12 +50,12 @@
     }
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.1",
-    "@capacitor/core": "^8.5.1",
     "electron": "^43.4.1",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.1"
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1"
   }
 }
