@@ -127,10 +127,27 @@ class HUD:
         pygame.draw.rect(screen, (60, 180, 80, 60), (qx, qy, 235, 178), border_radius=6, width=1)
         title = self.title_font.render("QUESTS", True, (100, 200, 120))
         screen.blit(title, (qx + 10, qy + 5))
+        daily = None
+        dsys = getattr(self.player, "dailies", None)
+        if dsys:
+            st = dsys.get_status()
+            badge = self.font.render(f"DAILY {st['done']}/{st['total']}", True, (255, 200, 90))
+            screen.blit(badge, (qx + 235 - badge.get_width() - 8, qy + 6))
+            daily = dsys.first_incomplete()
+        cy = qy + 30
+        if daily:
+            # One compact line: [D] name c/n — clipped to the panel width
+            df = pygame.font.Font(None, 16)
+            line = "[D] {} {}/{}".format(daily.get("name", ""),
+                                         daily.get("count", 0), daily.get("needed", 1))
+            while df.size(line)[0] > 207 and len(line) > 4:
+                line = line[:-2] + "~"
+            screen.blit(df.render(line, True, (255, 210, 110)), (qx + 10, cy + 5))
+            cy += 24
         if hasattr(self.player, 'quests') and self.player.quests:
             # Accumulate y so a progress line never sits on the next quest name
-            cy = qy + 30
-            for quest in self.player.quests[:3]:
+            budget = 3 if cy == qy + 30 else 2
+            for quest in self.player.quests[:budget]:
                 color = GOLD if quest.get("complete") else (200, 200, 200)
                 txt = f"{'[x]' if quest.get('complete') else '[ ]'} {quest['name']}"
                 surf = self.font.render(txt, True, color)
@@ -140,7 +157,7 @@ class HUD:
                     prog = self.font.render(f"  {quest['progress']}", True, (150, 150, 150))
                     screen.blit(prog, (qx + 15, cy))
                     cy += 24
-        else:
+        elif not daily:
             noq = self.font.render("No active quests", True, (120, 120, 130))
             screen.blit(noq, (qx + 10, qy + 40))
 

@@ -70,7 +70,7 @@ class AchievementSystem:
             gold_txt = small_font.render(f"+{n['gold']} Gold", True, (*GOLD[:3], int(255 * alpha)))
             surface.blit(gold_txt, (nx + w - 80, ny + 14))
 
-    def draw_screen(self, surface, font, small_font):
+    def draw_screen(self, surface, font, small_font, dailies=None):
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         surface.blit(overlay, (0, 0))
@@ -89,6 +89,8 @@ class AchievementSystem:
         surface.blit(pct, (sx + sw - 180, sy + 18))
 
         y = sy + 50
+        # Tighter rows when the list would otherwise overflow the panel
+        row_h = max(34, min(44, (sh - 90) // max(1, len(ACHIEVEMENTS))))
         for ach_id, data in ACHIEVEMENTS.items():
             unlocked = ach_id in self.unlocked
             color = GREEN_GLOW if unlocked else (80, 80, 80)
@@ -98,12 +100,41 @@ class AchievementSystem:
             nm = small_font.render(data["name"], True, color)
             surface.blit(nm, (sx + 60, y))
             ds = small_font.render(data["desc"], True, (120, 120, 120) if not unlocked else (160, 180, 160))
-            surface.blit(ds, (sx + 60, y + 18))
+            surface.blit(ds, (sx + 60, y + 16))
             gd = small_font.render(f"+{data['reward_gold']}g", True, GOLD if unlocked else (80, 80, 60))
             surface.blit(gd, (sx + sw - 80, y + 4))
-            y += 44
+            y += row_h
             if y > sy + sh - 40:
                 break
+
+        # Right column — today's daily quests
+        if dailies:
+            dx = sx + sw // 2 + 60
+            dt = font.render("DAILY QUESTS", True, (255, 200, 90))
+            surface.blit(dt, (dx, sy + 12))
+            st = dailies.get_status()
+            sub = small_font.render(f"{st['done']}/{st['total']} done • resets at midnight",
+                                    True, (160, 160, 140))
+            surface.blit(sub, (dx, sy + 44))
+            dy = sy + 80
+            for q in dailies.summary_lines():
+                color = GREEN_GLOW if q["complete"] else (200, 200, 200)
+                icon = "[x]" if q["complete"] else "[ ]"
+                ic = small_font.render(icon, True, color)
+                surface.blit(ic, (dx, dy))
+                nm = small_font.render(q["name"], True, color)
+                surface.blit(nm, (dx + 40, dy))
+                pg = small_font.render(q["progress"], True,
+                                       GREEN_GLOW if q["complete"] else (255, 210, 110))
+                surface.blit(pg, (dx + 300, dy))
+                ds = small_font.render(q["desc"], True, (120, 120, 120))
+                surface.blit(ds, (dx + 40, dy + 18))
+                rw = small_font.render(f"+{q['reward_xp']}xp  +{q['reward_gold']}g",
+                                       True, GOLD if q["complete"] else (80, 80, 60))
+                surface.blit(rw, (dx + 300, dy + 18))
+                dy += 50
+                if dy > sy + sh - 40:
+                    break
 
         hint = small_font.render("ESC to close", True, (80, 100, 80))
         surface.blit(hint, (sx + 20, sy + sh - 30))

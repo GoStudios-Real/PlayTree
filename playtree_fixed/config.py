@@ -134,6 +134,7 @@ DEFAULT_SETTINGS = {
     'show_damage_numbers': True,
     'auto_collect': True,
     'online_mode': False,
+    'sync_url': '',
     'controls': {
         'move': 'WASD / Arrow Keys',
         'attack': 'Left Click',

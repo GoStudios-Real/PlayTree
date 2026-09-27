@@ -80,7 +80,12 @@
     })();
   </script>
   <!-- ===== PlayTree Games — store page, ratings, follows, chat, installs ===== -->
-  <button id="gamesBtn" type="button">GAMES</button>
+  <div id="topNav">
+    <button id="gamesBtn" type="button">GAMES</button>
+    <button id="boardBtn" type="button">LEADERBOARD</button>
+    <button id="creationsBtn" type="button">CREATIONS</button>
+    <button id="profileBtn" type="button">PROFILE</button>
+  </div>
   <div id="gamesOverlay" hidden>
     <div class="gwin">
       <header class="gtop">
@@ -105,14 +110,20 @@
   </div>
   <div id="gToast" role="status"></div>
   <style>
-    #gamesBtn {
+    #topNav {
       position: fixed; top: 12px; left: 12px; z-index: 99998;
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    #gamesBtn, #boardBtn, #creationsBtn, #profileBtn {
       padding: 9px 22px; font: 700 15px "Segoe UI", system-ui, sans-serif;
       letter-spacing: 2px; color: #0e1320; background: #59c48f;
       border: 0; border-radius: 24px; cursor: pointer;
       box-shadow: 0 3px 14px rgba(0,0,0,.45);
     }
-    #gamesBtn:hover { background: #7dffc0; }
+    #gamesBtn:hover, #boardBtn:hover, #creationsBtn:hover, #profileBtn:hover { background: #7dffc0; }
+    #boardBtn { background: #ffd75e; }
+    #creationsBtn { background: #7db8ff; }
+    #profileBtn { background: #c99bff; }
     #gamesOverlay {
       position: fixed; inset: 0; z-index: 99997;
       background: rgba(5, 8, 14, .88); backdrop-filter: blur(3px);
@@ -361,12 +372,590 @@
       ["keydown", "keyup", "mousedown", "mouseup", "mousemove", "wheel", "touchstart", "touchend"].forEach(function (t) {
         overlay.addEventListener(t, function (e) { e.stopPropagation(); });
       });
-      function openOverlay() { overlay.hidden = false; render(); renderChat(); }
+      function openOverlay() {
+        ["boardOverlay", "creationsOverlay", "profileOverlay"].forEach(function (id) {
+          var el = document.getElementById(id); if (el) el.hidden = true;
+        });
+        overlay.hidden = false; render(); renderChat();
+      }
       function closeOverlay() { overlay.hidden = true; }
       document.getElementById("gamesBtn").addEventListener("click", openOverlay);
       document.getElementById("gamesClose").addEventListener("click", closeOverlay);
       overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) closeOverlay(); });
       document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !overlay.hidden) closeOverlay(); });
+    })();
+  </script>
+  <!-- ===== LEADERBOARD — cloud-first, localStorage fallback, seeded offline table ===== -->
+  <div id="boardOverlay" hidden>
+    <div class="gwin">
+      <header class="gtop">
+        <h2>LEADERBOARDS</h2>
+        <div class="gtopRight">
+          <input id="syncUrl" type="text" placeholder="Cloud server URL (optional)" />
+          <button id="syncSave" type="button">SAVE</button>
+          <button id="boardClose" type="button">CLOSE</button>
+        </div>
+      </header>
+      <div class="btabs" id="boardTabs"></div>
+      <div class="bbody">
+        <table class="btable"><thead><tr><th>#</th><th>Name</th><th>Score</th></tr></thead>
+          <tbody id="boardRows"></tbody></table>
+        <div class="bsub">
+          <span id="boardNote">offline board</span>
+          <span class="bsubForm"><input id="sbName" type="text" maxlength="16" placeholder="Your name" />
+          <input id="sbScore" type="number" min="0" placeholder="Score" />
+          <button id="sbGo" type="button">SUBMIT</button></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ===== CREATIONS — paste PT1 share codes from Creator Studio ===== -->
+  <div id="creationsOverlay" hidden>
+    <div class="gwin">
+      <header class="gtop">
+        <h2>CREATOR STUDIO SHARE</h2>
+        <div class="gtopRight"><button id="creationsClose" type="button">CLOSE</button></div>
+      </header>
+      <div class="cbody">
+        <section class="cimport">
+          <h3>IMPORT A SHARE CODE</h3>
+          <p>Paste a PT1 code from PlayTree Creator Studio (Share button), then import it.</p>
+          <textarea id="shareCode" rows="6" placeholder="PT1:..."></textarea>
+          <div class="cbtns"><button id="shareImport" type="button">IMPORT</button>
+            <button id="shareClear" type="button">CLEAR</button></div>
+          <div id="shareResult" class="cresult" hidden></div>
+        </section>
+        <section class="cshelf">
+          <h3>MY SHELF <span id="shelfCount">0</span></h3>
+          <div id="shelfList" class="clist"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <!-- ===== PROFILE — GoConsole sign-in, achievements, daily quests ===== -->
+  <div id="profileOverlay" hidden>
+    <div class="gwin">
+      <header class="gtop">
+        <h2>GOCONSOLE PROFILE</h2>
+        <div class="gtopRight"><button id="profileClose" type="button">CLOSE</button></div>
+      </header>
+      <div class="pbody">
+        <section class="paccount" id="pAccount"></section>
+        <section class="pstats">
+          <div class="pbanner"><span id="pLevel">Lv 1</span><span id="pRound">Round 1</span><span id="pCloud">cloud: off</span></div>
+          <h3>DAILY QUESTS <span id="pDailies"></span></h3>
+          <div id="pDailyList" class="clist"></div>
+          <h3>ACHIEVEMENTS <span id="pAchCount"></span></h3>
+          <div id="pAchList" class="clist"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <style>
+    #boardOverlay, #creationsOverlay, #profileOverlay {
+      position: fixed; inset: 0; z-index: 99997;
+      background: rgba(5, 8, 14, .88); backdrop-filter: blur(3px);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    .btabs { display: flex; gap: 8px; padding: 10px 18px; flex-wrap: wrap;
+      background: #101728; border-bottom: 1px solid #243049; }
+    .btabs button {
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 6px 12px;
+      border-radius: 7px; border: 1px solid #2b3a55; background: #1a2438;
+      color: #cfe9da; cursor: pointer;
+    }
+    .btabs button.on { background: #ffd75e; border-color: #ffd75e; color: #0e1320; }
+    .bbody { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex;
+      flex-direction: column; gap: 10px; }
+    .btable { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .btable th { text-align: left; color: #8fb7a0; font-size: 12px; letter-spacing: 2px;
+      padding: 6px 10px; border-bottom: 1px solid #243049; }
+    .btable td { padding: 7px 10px; border-bottom: 1px solid #182238; color: #cfe9da; }
+    .btable tr:nth-child(1) td { color: #ffd75e; font-weight: 700; }
+    .btable tr:nth-child(2) td { color: #dfe7ef; }
+    .btable tr:nth-child(3) td { color: #d9a066; }
+    .btable tr.me td { color: #59ff9d; font-weight: 700; }
+    .bsub { display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; flex-wrap: wrap; font-size: 12px; color: #7f9db3; }
+    .bsubForm { display: flex; gap: 6px; }
+    .bsubForm input { background: #0b101c; border: 1px solid #2b3a55; color: #cfe9da;
+      border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+    .bsubForm input[type=number] { width: 100px; }
+    .bsubForm button, .cbtns button {
+      background: #59c48f; border: 0; color: #0e1320; font-weight: 700;
+      border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px;
+    }
+    .cbody, .pbody { flex: 1; display: flex; gap: 14px; padding: 14px 18px; min-height: 0;
+      overflow-y: auto; }
+    .cimport { flex: 3; display: flex; flex-direction: column; gap: 8px; }
+    .cimport h3, .cshelf h3, .pstats h3 { margin: 0; font-size: 13px; letter-spacing: 2px;
+      color: #59ff9d; }
+    .cimport p { margin: 0; font-size: 13px; color: #9fb8c9; }
+    #shareCode { background: #0b101c; border: 1px solid #2b3a55; color: #cfe9da;
+      border-radius: 8px; padding: 10px; font: 12px/1.4 Consolas, monospace;
+      resize: vertical; width: 100%; box-sizing: border-box; }
+    .cbtns { display: flex; gap: 8px; }
+    .cbtns button { background: #7db8ff; }
+    .cresult { border: 1px solid #59c48f; background: #131a2c; border-radius: 10px;
+      padding: 10px 14px; font-size: 13px; color: #eafff2; }
+    .cshelf { flex: 2; display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+    .clist { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+    .citem { background: #131a2c; border: 1px solid #243049; border-radius: 9px;
+      padding: 8px 10px; font-size: 13px; color: #cfe9da; display: flex;
+      justify-content: space-between; align-items: center; gap: 8px; }
+    .citem small { color: #7f9db3; display: block; }
+    .citem .row { display: flex; gap: 5px; flex-shrink: 0; }
+    .citem .row button { font-size: 11px; font-weight: 700; padding: 5px 9px;
+      border-radius: 6px; border: 1px solid #2b3a55; background: #1a2438;
+      color: #cfe9da; cursor: pointer; }
+    .citem .row button:hover { filter: brightness(1.3); }
+    .paccount { flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 8px; }
+    .pstats { flex: 2; display: flex; flex-direction: column; gap: 8px; }
+    .pbanner { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; font-weight: 700; }
+    .pbanner span { background: #131a2c; border: 1px solid #243049; border-radius: 8px;
+      padding: 6px 12px; color: #ffd75e; }
+    #pCloud { color: #7f9db3; }
+    .pfield { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #8fb7a0; }
+    .pfield input { background: #0b101c; border: 1px solid #2b3a55; color: #cfe9da;
+      border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+    .pbtns { display: flex; gap: 8px; margin-top: 4px; }
+    .pbtns button { flex: 1; background: #c99bff; border: 0; color: #0e1320;
+      font-weight: 700; border-radius: 8px; padding: 9px; cursor: pointer; font-size: 13px; }
+    .pbtns .out { background: #243049; color: #cfe9da; }
+    #pErr { color: #ff8f8f; font-size: 12px; min-height: 14px; }
+    .achItem b { color: #ffd75e; font-weight: 400; }
+    .achItem .got { color: #59ff9d; }
+    .pnote { font-size: 12px; color: #7f9db3; }
+    @media (max-width: 860px) {
+      .cbody, .pbody { flex-direction: column; }
+      .cshelf { min-width: 0; }
+    }
+  </style>
+  <script>
+    (function () {
+      var SYNC_KEY = "pt_sync_url", LB_KEY = "pt_leaderboard_v1", SHELF_KEY = "pt_creations_v1";
+      var ACCOUNT_KEY = "pt_account_v1", SESSION_KEY = "pt_session_v1", PROFILE_KEY = "pt_profile_v1";
+      function $(id) { return document.getElementById(id); }
+      var toastEl = $("gToast"), toastTimer = null;
+      function toast(msg) {
+        toastEl.textContent = msg; toastEl.classList.add("show");
+        clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2600);
+      }
+      function getSync() { try { return (localStorage.getItem(SYNC_KEY) || "").replace(/\/+$/, ""); } catch (e) { return ""; } }
+      function seed(str, mod) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 16777619) >>> 0; } return h % mod; }
+      function today() { var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+
+      /* ---------- PT1 share codes (mirror of Creator Studio encode) ---------- */
+      function decodeShare(code) {
+        code = (code || "").trim();
+        if (code.indexOf("PT1:") !== 0) throw new Error("not a PlayTree share code");
+        var bin;
+        try { bin = atob(code.slice(4)); } catch (e) { throw new Error("share code is damaged"); }
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        var p;
+        try { p = JSON.parse(new TextDecoder("utf-8").decode(bytes)); } catch (e) { throw new Error("share code is damaged"); }
+        if (!p || !Array.isArray(p.cells) || !p.cells.length || !p.cells[0].length)
+          throw new Error("share code has no game grid");
+        p.name = p.name || "Imported Game";
+        return p;
+      }
+
+      /* ---------- LEADERBOARD ---------- */
+      var CATS = [
+        { id: "level", name: "Highest Level", min: 5, max: 60 },
+        { id: "gold", name: "Most Gold", min: 500, max: 50000 },
+        { id: "kills", name: "Most Kills", min: 10, max: 500 },
+        { id: "bosses", name: "Bosses Defeated", min: 1, max: 12 },
+        { id: "playtime", name: "Most Playtime", min: 1, max: 80 },
+        { id: "round", name: "Furthest Round", min: 1, max: 8 }
+      ];
+      var NAMES = ["Aria", "Bramble", "Cobalt", "Dusk", "Ember", "Fern", "Glimmer", "Hollow", "Ivy", "Juno", "Kael", "Lumen"];
+      var curCat = "level", cloudBoard = null;
+      function seededRows(cat) {
+        var def = CATS.filter(function (c) { return c.id === cat; })[0];
+        return NAMES.map(function (n) {
+          return { name: n, score: def.min + seed(cat + n, def.max - def.min + 1), bot: true };
+        });
+      }
+      function localBoard() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || {}; } catch (e) { return {}; } }
+      function saveLocalBoard(b) { try { localStorage.setItem(LB_KEY, JSON.stringify(b)); } catch (e) {} }
+      function mergeRows(a, b) {
+        var out = {};
+        a.concat(b).forEach(function (e) {
+          if (!e || typeof e.name !== "string" || typeof e.score !== "number") return;
+          if (!out[e.name] || e.score > out[e.name].score) out[e.name] = e;
+        });
+        return Object.keys(out).map(function (k) { return out[k]; })
+          .sort(function (x, y) { return y.score - x.score; }).slice(0, 15);
+      }
+      function renderTabs() {
+        var tabs = $("boardTabs"); tabs.innerHTML = "";
+        CATS.forEach(function (c) {
+          var b = document.createElement("button");
+          b.type = "button"; b.textContent = c.name;
+          if (c.id === curCat) b.className = "on";
+          b.addEventListener("click", function () { curCat = c.id; renderTabs(); renderBoard(); });
+          tabs.appendChild(b);
+        });
+      }
+      function renderBoard() {
+        var rows = seededRows(curCat);
+        var loc = localBoard()[curCat] || [];
+        rows = mergeRows(rows, loc);
+        if (cloudBoard && cloudBoard[curCat]) rows = mergeRows(rows, cloudBoard[curCat]);
+        var me = $("sbName").value.trim();
+        var tb = $("boardRows"); tb.innerHTML = "";
+        rows.forEach(function (r, i) {
+          var tr = document.createElement("tr");
+          if (r.name === me && me) tr.className = "me";
+          var td1 = document.createElement("td"); td1.textContent = "#" + (i + 1);
+          var td2 = document.createElement("td"); td2.textContent = r.name + (r.bot ? "" : " (you)");
+          var td3 = document.createElement("td");
+          td3.textContent = curCat === "playtime" ? r.score.toFixed(1) + "h" :
+            (curCat === "gold" ? r.score.toLocaleString() : String(Math.round(r.score)));
+          tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+          tb.appendChild(tr);
+        });
+        $("boardNote").textContent = getSync()
+          ? "cloud: " + getSync() + (cloudBoard ? " (live)" : " (unreachable — showing offline board)")
+          : "offline board — set a cloud server URL to go live";
+      }
+      function fetchBoard() {
+        var url = getSync();
+        cloudBoard = null;
+        if (!url) { renderBoard(); return; }
+        fetch(url + "/leaderboard", { cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { cloudBoard = (d && d.entries) || null; renderBoard(); })
+          .catch(function () { renderBoard(); });
+      }
+      $("syncSave").addEventListener("click", function () {
+        var v = $("syncUrl").value.trim().replace(/\/+$/, "");
+        try { localStorage.setItem(SYNC_KEY, v); } catch (e) {}
+        toast(v ? "Cloud server saved." : "Cloud server cleared.");
+        fetchBoard();
+      });
+      $("sbGo").addEventListener("click", function () {
+        var name = $("sbName").value.trim(), score = parseInt($("sbScore").value, 10);
+        if (!name || !(score >= 0)) { toast("Enter a name and a score first."); return; }
+        var b = localBoard();
+        var list = b[curCat] || [];
+        var ex = list.filter(function (e) { return e.name === name; })[0];
+        if (ex) ex.score = Math.max(ex.score, score);
+        else list.push({ name: name, score: score, time: Date.now() / 1000 });
+        b[curCat] = list.sort(function (x, y) { return y.score - x.score; }).slice(0, 50);
+        saveLocalBoard(b); toast("Score submitted to your offline board.");
+        renderBoard();
+      });
+      $("boardClose").addEventListener("click", function () { $("boardOverlay").hidden = true; });
+
+      /* ---------- CREATIONS ---------- */
+      var pending = null;
+      function shelf() { try { return JSON.parse(localStorage.getItem(SHELF_KEY)) || []; } catch (e) { return []; } }
+      function saveShelf(s) { try { localStorage.setItem(SHELF_KEY, JSON.stringify(s)); } catch (e) {} }
+      function renderShelf() {
+        var s = shelf(), list = $("shelfList");
+        $("shelfCount").textContent = String(s.length);
+        list.innerHTML = "";
+        if (!s.length) {
+          var p = document.createElement("p"); p.className = "pnote";
+          p.textContent = "Nothing here yet — import a share code to keep it.";
+          list.appendChild(p);
+        }
+        s.forEach(function (c, i) {
+          var item = document.createElement("div"); item.className = "citem";
+          var info = document.createElement("div");
+          info.innerHTML = "<b></b><small></small>";
+          info.querySelector("b").textContent = c.name;
+          info.querySelector("small").textContent = (c.cols || "?") + "x" + (c.rows || "?") + " tiles";
+          var row = document.createElement("div"); row.className = "row";
+          var dl = document.createElement("button"); dl.type = "button"; dl.textContent = "DOWNLOAD";
+          dl.addEventListener("click", function () { downloadProject(c.code, c.name); });
+          var cp = document.createElement("button"); cp.type = "button"; cp.textContent = "COPY CODE";
+          cp.addEventListener("click", function () { copyText(c.code); });
+          var rm = document.createElement("button"); rm.type = "button"; rm.textContent = "REMOVE";
+          rm.addEventListener("click", function () { var sh = shelf(); sh.splice(i, 1); saveShelf(sh); renderShelf(); });
+          row.appendChild(dl); row.appendChild(cp); row.appendChild(rm);
+          item.appendChild(info); item.appendChild(row);
+          list.appendChild(item);
+        });
+      }
+      function downloadProject(code, name) {
+        var p = decodeShare(code);
+        var blob = new Blob([JSON.stringify(p, null, 2)], { type: "application/json" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (name || "game").replace(/[^\w \-]+/g, "") + ".ptproj";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        toast("Downloading " + a.download + " ...");
+      }
+      function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { toast("Share code copied."); },
+            function () { toast("Clipboard blocked — use DOWNLOAD instead."); });
+        } else toast("Clipboard unsupported — use DOWNLOAD instead.");
+      }
+      $("shareImport").addEventListener("click", function () {
+        var res = $("shareResult"); res.hidden = false;
+        try {
+          pending = decodeShare($("shareCode").value);
+          res.innerHTML = "<b></b><div class='pnote'></div>";
+          res.querySelector("b").textContent = "Loaded: " + pending.name;
+          res.querySelector(".pnote").textContent = pending.cells.length + " rows x " + pending.cells[0].length + " cols — import to shelf?";
+          var row = document.createElement("div"); row.className = "cbtns";
+          var add = document.createElement("button"); add.type = "button"; add.textContent = "ADD TO SHELF";
+          add.addEventListener("click", function () {
+            var sh = shelf();
+            sh.push({ name: pending.name, code: $("shareCode").value.trim(),
+                      cols: pending.cells[0].length, rows: pending.cells.length, ts: Date.now() });
+            saveShelf(sh); renderShelf(); toast("Added to your shelf!");
+          });
+          var dlb = document.createElement("button"); dlb.type = "button"; dlb.textContent = "DOWNLOAD .ptproj";
+          dlb.addEventListener("click", function () { downloadProject($("shareCode").value.trim(), pending.name); });
+          row.appendChild(add); row.appendChild(dlb);
+          res.appendChild(row);
+        } catch (e) {
+          pending = null;
+          res.innerHTML = "<b></b>";
+          res.querySelector("b").textContent = "Import failed: " + e.message;
+        }
+      });
+      $("shareClear").addEventListener("click", function () {
+        $("shareCode").value = ""; $("shareResult").hidden = true; pending = null;
+      });
+      $("creationsClose").addEventListener("click", function () { $("creationsOverlay").hidden = true; });
+
+      /* ---------- PROFILE ---------- */
+      var ACH = [
+        { id: "first_blood", name: "First Blood", desc: "Defeat your first enemy", g: 10 },
+        { id: "boss_slayer", name: "Boss Slayer", desc: "Defeat your first boss", g: 50 },
+        { id: "round_clear", name: "Round Clear", desc: "Clear all 4 rounds", g: 200 },
+        { id: "collector", name: "Collector", desc: "Collect 100 resources", g: 30 },
+        { id: "craft_master", name: "Craft Master", desc: "Craft 20 items", g: 40 },
+        { id: "tamer", name: "Tamer", desc: "Tame 5 creatures", g: 30 },
+        { id: "builder", name: "Builder", desc: "Build 10 structures", g: 40 },
+        { id: "multiplayer", name: "Social Butterfly", desc: "Join 5 multiplayer games", g: 25 },
+        { id: "survivor", name: "Survivor", desc: "Survive 10 minutes", g: 15 },
+        { id: "rich", name: "Rich", desc: "Accumulate 1000 Gold Leaves", g: 50 },
+        { id: "fisherman", name: "Fisherman", desc: "Catch 10 fish", g: 20 },
+        { id: "legendary_gear", name: "Legendary Gear", desc: "Own a Legendary weapon", g: 100 },
+        { id: "full_skill_tree", name: "Full Build", desc: "Max out a skill tree", g: 150 },
+        { id: "new_game_plus", name: "New Game+", desc: "Complete New Game+", g: 500 },
+        { id: "secret_boss", name: "Secret Hunter", desc: "Find and defeat a secret boss", g: 200 }
+      ];
+      var DAILY_POOL = [
+        { id: "kill10", name: "Defeat enemies", desc: "Defeat 10 enemies", needed: 10, xp: 60, g: 25 },
+        { id: "kill18", name: "Defeat enemies", desc: "Defeat 18 enemies", needed: 18, xp: 90, g: 40 },
+        { id: "kill_boss", name: "Defeat a boss", desc: "Defeat any boss", needed: 1, xp: 120, g: 60 },
+        { id: "tree8", name: "Collect Tree Energy", desc: "Collect 8 Tree Energy", needed: 8, xp: 50, g: 20 },
+        { id: "crystal6", name: "Collect Crystal Dust", desc: "Collect 6 Crystal Dust", needed: 6, xp: 55, g: 25 },
+        { id: "any15", name: "Gather resources", desc: "Collect 15 of any resource", needed: 15, xp: 65, g: 30 },
+        { id: "tame1", name: "Tame a creature", desc: "Tame 1 wild creature", needed: 1, xp: 80, g: 35 },
+        { id: "tame2", name: "Tame creatures", desc: "Tame 2 wild creatures", needed: 2, xp: 110, g: 50 },
+        { id: "round1", name: "Clear a round", desc: "Defeat a round boss to clear a round", needed: 1, xp: 100, g: 45 },
+        { id: "explore2", name: "Explore regions", desc: "Visit 2 different regions", needed: 2, xp: 70, g: 30 }
+      ];
+      var CRC_TABLE = (function () {
+        var t = [], c, n, k;
+        for (n = 0; n < 256; n++) {
+          c = n;
+          for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          t[n] = c >>> 0;
+        }
+        return t;
+      })();
+      function crc32(str) {
+        var bytes = new TextEncoder().encode(str), c = 0xFFFFFFFF;
+        for (var i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+        return (c ^ 0xFFFFFFFF) >>> 0;
+      }
+      function dailyPicks(dateStr) {
+        // Mirrors playtree_fixed/src/dailies.py _ensure_today exactly
+        var seed = crc32(dateStr) % 2147483647 || 1;
+        var idx = [];
+        while (idx.length < 3) {
+          seed = (seed * 48271) % 2147483647;
+          var j = seed % DAILY_POOL.length;
+          if (idx.indexOf(j) < 0) idx.push(j);
+        }
+        return idx.map(function (j) { return DAILY_POOL[j]; });
+      }
+      function sha256hex(s) {
+        if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+          return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)).then(function (buf) {
+            return Array.from(new Uint8Array(buf)).map(function (b) {
+              return ("0" + b.toString(16)).slice(-2);
+            }).join("");
+          });
+        }
+        // Non-secure contexts (file://): deterministic demo hash
+        var h = 5381;
+        for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+        return Promise.resolve("demo" + h.toString(16));
+      }
+      function account() { try { return JSON.parse(localStorage.getItem(ACCOUNT_KEY)) || null; } catch (e) { return null; } }
+      function session() { try { return localStorage.getItem(SESSION_KEY) || ""; } catch (e) { return ""; } }
+      var cloudProfile = null;
+      function renderAccount() {
+        var box = $("pAccount"), acc = account(), ses = session();
+        box.innerHTML = "";
+        if (ses && acc && acc.email === ses) {
+          var h = document.createElement("h3"); h.textContent = "SIGNED IN";
+          var who = document.createElement("div"); who.className = "citem";
+          who.innerHTML = "<b></b><small></small>";
+          who.querySelector("b").textContent = acc.name;
+          who.querySelector("small").textContent = acc.email;
+          var note = document.createElement("p"); note.className = "pnote";
+          note.textContent = "GoConsole account (local). Game achievements and dailies appear when a cloud server URL is set.";
+          var btns = document.createElement("div"); btns.className = "pbtns";
+          var out = document.createElement("button"); out.type = "button"; out.className = "out";
+          out.textContent = "SIGN OUT";
+          out.addEventListener("click", function () {
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+            toast("Signed out."); renderAccount();
+          });
+          btns.appendChild(out);
+          box.appendChild(h); box.appendChild(who); box.appendChild(note); box.appendChild(btns);
+        } else {
+          var h2 = document.createElement("h3"); h2.textContent = acc ? "SIGN IN" : "CREATE ACCOUNT";
+          box.appendChild(h2);
+          [["pEmail", "Email", "email"], ["pPass", "Password", "password"], ["pName", "Display name (optional)", "text"]].forEach(function (f) {
+            var lab = document.createElement("label"); lab.className = "pfield";
+            lab.textContent = f[1];
+            var inp = document.createElement("input");
+            inp.id = f[0]; inp.type = f[2];
+            if (f[0] === "pPass") inp.minLength = 6;
+            lab.appendChild(inp); box.appendChild(lab);
+          });
+          var err = document.createElement("div"); err.id = "pErr"; box.appendChild(err);
+          var row = document.createElement("div"); row.className = "pbtns";
+          var go = document.createElement("button"); go.type = "button"; go.textContent = acc ? "SIGN IN" : "SIGN UP";
+          var alt = document.createElement("button"); alt.type = "button"; alt.className = "out";
+          alt.textContent = acc ? "SWITCH TO SIGN UP" : "SWITCH TO SIGN IN";
+          var mode = acc ? "in" : "up";
+          function flip() {
+            mode = mode === "in" ? "up" : "in";
+            err.textContent = "";
+            h2.textContent = mode === "in" ? "SIGN IN" : "CREATE ACCOUNT";
+            go.textContent = mode === "in" ? "SIGN IN" : "SIGN UP";
+            alt.textContent = mode === "in" ? "SWITCH TO SIGN UP" : "SWITCH TO SIGN IN";
+            var nm = $("pName"); if (nm) nm.style.display = mode === "up" ? "" : "none";
+          }
+          alt.addEventListener("click", flip);
+          go.addEventListener("click", function () {
+            var email = ($("pEmail").value || "").trim().toLowerCase();
+            var pass = $("pPass").value || "";
+            var nm = ($("pName") && $("pName").value || "").trim();
+            if (email.indexOf("@") < 1) { err.textContent = "Enter a valid email."; return; }
+            if (pass.length < 6) { err.textContent = "Password must be at least 6 characters."; return; }
+            sha256hex(email + ":" + pass).then(function (hash) {
+              var acc2 = account();
+              if (mode === "up") {
+                if (acc2 && acc2.email === email) { err.textContent = "Account already exists — sign in."; return; }
+                localStorage.setItem(ACCOUNT_KEY, JSON.stringify({
+                  email: email, name: nm || email.split("@")[0], hash: hash, created: Date.now()
+                }));
+                toast("Account created!");
+              } else {
+                if (!acc2 || acc2.email !== email || acc2.hash !== hash) {
+                  err.textContent = "Account not found or wrong password."; return;
+                }
+                toast("Welcome back, " + acc2.name + "!");
+              }
+              try { localStorage.setItem(SESSION_KEY, email); } catch (e) {}
+              renderAccount();
+            });
+          });
+          row.appendChild(go); row.appendChild(alt);
+          box.appendChild(row);
+        }
+      }
+      function renderProfile() {
+        var ses = session(), prof = cloudProfile;
+        $("pCloud").textContent = getSync()
+          ? (prof ? "cloud: live" : "cloud: unreachable")
+          : "cloud: off";
+        $("pLevel").textContent = "Lv " + ((prof && prof.level) || 1);
+        $("pRound").textContent = "Round " + ((prof && prof.round) || 1);
+        var unlocked = (prof && prof.achievements) || [];
+        $("pAchCount").textContent = unlocked.length + "/" + ACH.length;
+        var achList = $("pAchList"); achList.innerHTML = "";
+        if (!ses) {
+          var n = document.createElement("p"); n.className = "pnote";
+          n.textContent = "Sign in to track your achievements here.";
+          achList.appendChild(n);
+        } else {
+          ACH.forEach(function (a) {
+            var it = document.createElement("div"); it.className = "citem achItem";
+            var l = document.createElement("div");
+            l.innerHTML = "<b></b><small></small>";
+            l.querySelector("b").textContent = (unlocked.indexOf(a.id) >= 0 ? "[x] " : "[ ] ") + a.name;
+            if (unlocked.indexOf(a.id) >= 0) l.querySelector("b").className = "got";
+            l.querySelector("small").textContent = a.desc + "  (+" + a.g + "g)";
+            it.appendChild(l);
+            achList.appendChild(it);
+          });
+        }
+        var picks = dailyPicks(today());
+        var st = (prof && prof.dailies && prof.dailies.date === today()) ? prof.dailies : null;
+        $("pDailies").textContent = st ? st.done + "/" + st.total + " done today" : "resets at midnight";
+        var dl = $("pDailyList"); dl.innerHTML = "";
+        picks.forEach(function (q) {
+          var it = document.createElement("div"); it.className = "citem achItem";
+          var l = document.createElement("div");
+          l.innerHTML = "<b></b><small></small>";
+          l.querySelector("b").textContent = "[ ] " + q.name + "  0/" + q.needed;
+          l.querySelector("small").textContent = q.desc + "  (+" + q.xp + "xp  +" + q.g + "g)";
+          it.appendChild(l);
+          dl.appendChild(it);
+        });
+        var note = document.createElement("p"); note.className = "pnote";
+        note.textContent = "Same three dailies as the game — progress syncs with the cloud server.";
+        dl.appendChild(note);
+      }
+      function fetchProfile() {
+        var url = getSync();
+        cloudProfile = null;
+        if (url) {
+          fetch(url + "/profile", { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { cloudProfile = d || null; renderProfile(); })
+            .catch(function () { renderProfile(); });
+        } else renderProfile();
+      }
+      $("profileClose").addEventListener("click", function () { $("profileOverlay").hidden = true; });
+
+      /* ---------- overlay open/close + input isolation ---------- */
+      var MY = ["boardOverlay", "creationsOverlay", "profileOverlay"];
+      MY.forEach(function (id) {
+        var el = $(id);
+        ["keydown", "keyup", "mousedown", "mouseup", "mousemove", "wheel", "touchstart", "touchend"].forEach(function (t) {
+          el.addEventListener(t, function (e) { e.stopPropagation(); });
+        });
+        el.addEventListener("mousedown", function (e) { if (e.target === el) el.hidden = true; });
+      });
+      function openMine(id) {
+        MY.forEach(function (o) { $(o).hidden = true; });
+        $("gamesOverlay").hidden = true;
+        $(id).hidden = false;
+      }
+      $("boardBtn").addEventListener("click", function () {
+        $("syncUrl").value = getSync();
+        openMine("boardOverlay"); renderTabs(); fetchBoard();
+      });
+      $("creationsBtn").addEventListener("click", function () {
+        openMine("creationsOverlay"); renderShelf();
+      });
+      $("profileBtn").addEventListener("click", function () {
+        openMine("profileOverlay"); renderAccount(); fetchProfile();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key !== "Escape") return;
+        MY.forEach(function (id) { if (!$(id).hidden) $(id).hidden = true; });
+      });
+      renderTabs(); renderBoard(); renderShelf();
     })();
   </script>
   <script type="module" src="src/main.js"></script>

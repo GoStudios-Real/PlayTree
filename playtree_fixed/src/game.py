@@ -44,6 +44,8 @@ from src.new_game_plus import NewGamePlus
 from src.pet_system import PetManager
 from src.legend_features import PlayerCount, DoggoLegend, DancingBots, AdminAbuse
 from src.npcs import NPC, DialogueBox, NPC_TYPES
+from src.dailies import DailyQuestSystem
+from src import cloud_sync
 
 
 # Catalog shown by the main-menu GAMES button (mirrors the website games page).
@@ -266,6 +268,20 @@ class Game:
         # Achievements
         self.achievements = AchievementSystem(self.audio)
 
+        # Daily quests + lifetime achievement stat counters
+        self.dailies = DailyQuestSystem()
+        self.stat_kills = 0
+        self.stat_collected = 0
+        self.stat_tamed = 0
+        self.stat_crafted = 0
+        self.stat_mp_joins = 0
+        self.survivor_timer = 0.0
+
+        # Cloud sync boot — flush queued pushes + merge online leaderboard
+        if cloud_sync.is_enabled(self.settings):
+            cloud_sync.flush_async(self.settings)
+            cloud_sync.pull_leaderboard_async(self.settings)
+
         # Fishing
         self.fishing = FishingMinigame(self.audio)
         self.fishing_open = False
@@ -425,6 +441,7 @@ class Game:
         self.hud = HUD(self.player)
         self.crafting = CraftingSystem(self.player)
         self.quests = QuestSystem(self.player)
+        self._attach_quest_hooks()
         self.enemies = []
         self.creatures = []
         self.bosses = []
@@ -459,6 +476,91 @@ class Game:
         self.leaderboards.update_score("level", self.player.name, self.player.level)
         self.leaderboards.update_score("round", self.player.name, self.current_round)
 
+    def _attach_quest_hooks(self):
+        """Feed every quest event into dailies + achievement progress."""
+        if not self.quests:
+            return
+        # HUD reads dailies via the player it was constructed with
+        self.player.dailies = self.dailies
+        original = self.quests.update_progress
+
+        def hooked(objective, target=None, amount=1):
+            result = original(objective, target, amount)
+            self._game_event(objective, target, amount)
+            return result
+
+        self.quests.update_progress = hooked
+
+    def _game_event(self, objective, target=None, amount=1):
+        """Route one gameplay event into dailies and achievement counters."""
+        if self.dailies:
+            for q in self.dailies.on_event(objective, target, amount):
+                xp = q.get("reward_xp", 0)
+                gold = q.get("reward_gold", 0)
+                if self.player:
+                    self.player.add_xp(xp)
+                    res = self.player.inventory.setdefault("resources", {})
+                    res["Gold Leaves"] = res.get("Gold Leaves", 0) + gold
+                self.show_message(f"Daily complete: {q.get('name', '')} +{gold}g", 3)
+        if objective == "defeat":
+            self.stat_kills += amount
+            if self.stat_kills >= 1:
+                self._unlock_ach("first_blood")
+        elif objective == "collect":
+            self.stat_collected += amount
+            if self.stat_collected >= 100:
+                self._unlock_ach("collector")
+        elif objective == "tame":
+            self.stat_tamed += amount
+            if self.stat_tamed >= 5:
+                self._unlock_ach("tamer")
+
+    def _unlock_ach(self, achievement_id):
+        """Unlock an achievement once, grant its gold reward, notify."""
+        if not self.achievements or self.achievements.is_unlocked(achievement_id):
+            return False
+        reward = self.achievements.unlock(achievement_id)
+        if reward and self.player:
+            res = self.player.inventory.setdefault("resources", {})
+            res["Gold Leaves"] = res.get("Gold Leaves", 0) + reward
+        data = ACHIEVEMENTS.get(achievement_id, {})
+        self.show_message(f"Achievement: {data.get('name', achievement_id)} +{reward}g", 3)
+        return True
+
+    def _check_periodic_achievements(self, dt):
+        """Lifetime achievement checks (cheap dict lookups, once per frame)."""
+        if self.state == GameState.PLAYING and self.player:
+            res = self.player.inventory.get("resources", {})
+            if res.get("Gold Leaves", 0) >= 1000:
+                self._unlock_ach("rich")
+            if len(getattr(self.base_builder, "buildings", [])) >= 10:
+                self._unlock_ach("builder")
+            if self.skill_tree and self.skill_tree.skills and all(
+                    s.get("level", 0) >= s.get("max", 1)
+                    for s in self.skill_tree.skills.values()):
+                self._unlock_ach("full_skill_tree")
+            self.survivor_timer += dt
+            if self.survivor_timer >= 600:
+                self._unlock_ach("survivor")
+
+    def _profile_payload(self):
+        """Cloud profile: achievements + dailies + headline stats."""
+        status = self.dailies.get_status() if self.dailies else {}
+        return {
+            "name": self.player.name if self.player else "Player",
+            "achievements": sorted(self.achievements.unlocked) if self.achievements else [],
+            "dailies": status,
+            "level": self.player.level if self.player else 1,
+            "round": getattr(self, "current_round", 1),
+            "time": time.time(),
+        }
+
+    def _cloud_after_save(self):
+        """Called after every save_game — push save, scores and profile."""
+        cloud_sync.push_save_async(0, self.settings)
+        cloud_sync.push_scores_async(self.settings)
+        cloud_sync.push_profile_async(self._profile_payload(), self.settings)
+
     def _load_game(self):
         try:
             return self._load_game_impl()
@@ -468,6 +570,13 @@ class Game:
             return False
 
     def _load_game_impl(self):
+        # Cloud: adopt the remote save first when it's newer than our slot
+        try:
+            remote = cloud_sync.pull_save(0, self.settings)
+            if remote and cloud_sync.adopt_save(0, remote):
+                self.show_message("Loaded newer save from the cloud", 3)
+        except Exception:
+            pass
         data = load_game()
         if not data:
             self.show_message("No save data found!", 2)
@@ -547,6 +656,7 @@ class Game:
         self.shop_open = False
         self.lobby_open = False
         self.quests = QuestSystem(self.player)
+        self._attach_quest_hooks()
         # Skill tree
         pc2 = self.class_cycle[self.selected_class] if self.selected_class < len(self.class_cycle) else pc
         self.skill_tree = SkillTree(pc2, self.audio)
@@ -1372,6 +1482,7 @@ class Game:
                 self.shop_open = not was
             elif event.key == pygame.K_F5:
                 save_game(self.player, self)
+                self._cloud_after_save()
                 self.show_message("Game saved!", 2)
             elif event.key == pygame.K_m:
                 self._try_mount()
@@ -1708,6 +1819,8 @@ class Game:
                 self.player.inventory["resources"][drop] = self.player.inventory["resources"].get(drop, 0) + 1
         self.boss_health_bar.hide()
         self.boss_quest_stage += 1
+        self._unlock_ach("boss_slayer")
+        self._game_event("boss")
         self.show_message(f"{boss.name} defeated! +{int(boss.xp_reward * self.new_game_plus.get_xp_mult())} XP", 4)
         self.particles.burst(boss.x, boss.y, GOLD, 30, 6, 50, 8)
         self.leaderboards.update_score("kills", self.player.name, self.round_enemies_killed)
@@ -1715,6 +1828,7 @@ class Game:
         self.leaderboards.update_score("level", self.player.name, self.player.level)
         gold = self.player.inventory.get("resources", {}).get("Gold Leaves", 0)
         self.leaderboards.update_score("gold", self.player.name, gold)
+        cloud_sync.push_scores_async(self.settings)
 
         # Unlock new mount on boss kill
         boss_keys = list(BOSS_TYPES.keys())
@@ -1729,12 +1843,15 @@ class Game:
             self.round_boss_defeated = True
             self.round_boss_spawned = False
             self.round_enemies_killed = 0
+            self._game_event("round")
             self.audio.play("boss_defeat")
             if self.current_round >= self.max_rounds:
+                self._unlock_ach("round_clear")
                 if not self.ngp_activated:
                     self.new_game_plus.unlocked = True
                     self.new_game_plus.activate()
                     self.ngp_activated = True
+                    self._unlock_ach("new_game_plus")
                     self.ngp_active = True
                     self.ngp_timer = 0
                     self.state = GameState.END_CREDITS
@@ -1874,6 +1991,9 @@ class Game:
                 if self.crafting.craft(recipe_name):
                     self.show_message(f"Crafted {recipe_name}!", 2)
                     self.audio.play("craft")
+                    self.stat_crafted += 1
+                    if self.stat_crafted >= 20:
+                        self._unlock_ach("craft_master")
                 else:
                     self.show_message("Missing ingredients!", 2)
 
@@ -1928,6 +2048,8 @@ class Game:
         self.combo_display_timer = max(0, self.combo_display_timer - dt)
         if self.combo_display_timer <= 0:
             self.combo_display = 0
+        if self.achievements:
+            self.achievements.update(dt)
 
         self.damage_numbers = [d for d in self.damage_numbers if d["timer"] > 0]
         for d in self.damage_numbers:
@@ -1956,6 +2078,10 @@ class Game:
             if self.auto_save_timer <= 0:
                 self.auto_save_timer = 60
                 save_game(self.player, self)
+                self._cloud_after_save()
+
+        # Lifetime achievement checks (cheap dict lookups, once per frame)
+        self._check_periodic_achievements(dt)
 
         if self.state == GameState.LOGIN:
             self.account.error_timer = max(0, self.account.error_timer - dt * 60)
@@ -2563,7 +2689,7 @@ class Game:
             elif self.achievements_open and hasattr(self, 'achievements') and self.achievements:
                 font = pygame.font.Font(None, 32)
                 small_font = pygame.font.Font(None, 22)
-                self.achievements.draw_screen(self.screen, font, small_font)
+                self.achievements.draw_screen(self.screen, font, small_font, self.dailies)
             elif self.daily_rewards_open:
                 self.daily_rewards.draw(self.screen)
             elif self.leaderboards_open:
@@ -2590,6 +2716,10 @@ class Game:
                 f = pygame.font.Font(None, 20)
                 sf = pygame.font.Font(None, 14)
                 self.player_count.draw(self.screen, f, sf, y=HEIGHT - 30)
+            # Achievement + daily toasts — top-center, above the HUD
+            if self.achievements and self.achievements.notifications:
+                self.achievements.draw_notifications(
+                    self.screen, pygame.font.Font(None, 24), pygame.font.Font(None, 18))
 
         elif self.state == GameState.SETTINGS:
             self._draw_settings()
@@ -3421,6 +3551,11 @@ class Game:
                 color = GREEN_GLOW if val else (150, 60, 60)
                 vs = sf.render(on_off, True, color)
                 self.screen.blit(vs, (sx + sw - 120, iy + 6))
+                if key == "online_mode" and val:
+                    ep = cloud_sync.resolve_endpoint(self.settings)
+                    cs = "Cloud: " + (ep if ep else "not configured — set sync_url")
+                    css = sf_xs.render(cs, True, (140, 160, 140))
+                    self.screen.blit(css, (sx + 340, iy + 9))
 
         ctrl_y = sy + sh - 170  # 8th settings row (online_mode) ends at 480
         ch = sf_sm.render("CONTROLS", True, GOLD)
@@ -3592,6 +3727,9 @@ class Game:
             if join_rect.collidepoint(mx, my):
                 self.multiplayer.join_game("localhost", self.player.name)
                 self.audio.play("lobby_connect")
+                self.stat_mp_joins += 1
+                if self.stat_mp_joins >= 5:
+                    self._unlock_ach("multiplayer")
                 self.show_message("Joining game...", 3)
                 return
         else:
@@ -3841,6 +3979,19 @@ class Game:
         # GoStudios badge
         badge = pygame.font.Font(None, 14).render("GoStudios Account", True, (80,255,120))
         self.screen.blit(badge, (bx+170, by+140))
+        # Lifetime stats under the avatar
+        sf = pygame.font.Font(None, 20)
+        stats = [("Achievements", f"{len(self.achievements.unlocked)}/{len(ACHIEVEMENTS)}"
+                  if self.achievements else "0/0")]
+        if self.dailies:
+            st = self.dailies.get_status()
+            stats.append(("Dailies today", f"{st['done']}/{st['total']}"))
+        stats.append(("Level", str(self.player.level if self.player else 1)))
+        stats.append(("Current round", str(getattr(self, "current_round", 1))))
+        for i, (k, v) in enumerate(stats):
+            sy2 = by + 306 + i * 24
+            self.screen.blit(sf.render(k, True, (180, 180, 180)), (bx + 20, sy2))
+            self.screen.blit(sf.render(v, True, GOLD), (bx + 150, sy2))
         # Buttons like Minecraft stone
         def mc_btn(rect, text):
             pygame.draw.rect(self.screen, (0,0,0), rect)

@@ -14,6 +14,9 @@ Controls
 import os
 import sys
 import shutil
+import base64
+import json
+import subprocess
 import zipfile
 
 import pygame
@@ -32,8 +35,70 @@ else:
 PROJECTS = os.path.join(BASE, "projects")
 EXPORTS = os.path.join(BASE, "exports")
 
-TOOLBAR = [("New", 8), ("Open", 76), ("Save", 144), ("Playtest", 212), ("Export", 300), ("Quit", 376)]
+TOOLBAR = [("New", 8), ("Open", 76), ("Save", 144), ("Playtest", 212), ("Export", 300),
+           ("Share", 376), ("Import", 456), ("Quit", 536)]
 PALETTE_TOP = 64
+
+SHARE_PREFIX = "PT1:"
+
+
+def encode_share_code(project):
+    """Compact portable share code: PT1: + base64(JSON)."""
+    raw = json.dumps(project, separators=(",", ":"))
+    return SHARE_PREFIX + base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+
+def decode_share_code(code):
+    """Decode a PT1 share code back into a project dict. Raises ValueError."""
+    code = (code or "").strip()
+    if not code.startswith(SHARE_PREFIX):
+        raise ValueError("not a PlayTree share code")
+    try:
+        raw = base64.b64decode(code[len(SHARE_PREFIX):], validate=True)
+        project = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise ValueError("share code is damaged")
+    if not isinstance(project, dict) or not isinstance(project.get("cells"), list):
+        raise ValueError("share code has no game grid")
+    rows = len(project["cells"])
+    cols = len(project["cells"][0]) if rows else 0
+    if rows == 0 or cols == 0 or not all(len(r) == cols for r in project["cells"]):
+        raise ValueError("share code grid is malformed")
+    project.setdefault("name", "Imported Game")
+    project["rows"], project["cols"] = rows, cols
+    project.setdefault("version", 1)
+    project.setdefault("tile", 32)
+    project.setdefault("player", {"x": 1, "y": 1})
+    return project
+
+
+def read_clipboard():
+    try:
+        if sys.platform == "win32":
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
+                               capture_output=True, text=True, timeout=5)
+            return r.stdout.replace("\r\n", "\n").strip()
+        if sys.platform == "darwin":
+            return subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=5).stdout.strip()
+        return subprocess.run(["xclip", "-selection", "clipboard", "-o"],
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:
+        return ""
+
+
+def write_clipboard(text):
+    try:
+        if sys.platform == "win32":
+            r = subprocess.run(["clip"], input=text.encode("utf-8"), timeout=5)
+            return r.returncode == 0
+        if sys.platform == "darwin":
+            subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=5)
+            return True
+        subprocess.run(["xclip", "-selection", "clipboard"],
+                       input=text.encode("utf-8"), timeout=5)
+        return True
+    except Exception:
+        return False
 
 
 def runtime_source_path():
@@ -86,7 +151,8 @@ class Editor:
         self._tool_rects = [(pygame.Rect(x + 8, 12, w, 32), label)
                             for label, x, w in
                             [("New", 8, 60), ("Open", 72, 60), ("Save", 136, 60),
-                             ("Playtest", 200, 78), ("Export", 284, 70), ("Quit", 360, 60)]]
+                             ("Playtest", 200, 78), ("Export", 284, 70), ("Share", 360, 76),
+                             ("Import", 444, 78), ("Quit", 530, 60)]]
         self._pal_rects = []
         for i, tname in enumerate(TILE_NAMES):
             self._pal_rects.append((pygame.Rect(8, PALETTE_TOP + i * 58, 150, 50), i))
@@ -175,6 +241,29 @@ class Editor:
         self.toast = msg
         self.toast_t = 2.2
 
+    def share(self):
+        """Copy a PT1 share code for the current project to the clipboard."""
+        try:
+            code = encode_share_code(self.project)
+        except Exception as e:
+            self.status = "Share failed: {}".format(e)
+            self.show_toast("Share failed — see status bar")
+            return
+        if write_clipboard(code):
+            self.status = "Share code copied to clipboard ({} chars)".format(len(code))
+            self.show_toast("Share code copied — paste it anywhere!")
+        else:
+            self.begin_text("share", "Clipboard blocked — code below, Enter to retry copy:")
+            self.text_buf = code
+            self.show_toast("Could not reach the clipboard")
+
+    def import_code(self):
+        self.begin_text("import", "Paste a PT1 share code, then Enter:")
+        pasted = read_clipboard()
+        if pasted.startswith(SHARE_PREFIX):
+            self.text_buf = pasted
+            self.status = "Share code loaded from clipboard — Enter to import"
+
     # ---------- input ----------
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
@@ -191,13 +280,35 @@ class Editor:
                         self.save(buf)
                     elif kind == "open":
                         self.open(buf)
+                    elif kind == "share":
+                        if write_clipboard(buf):
+                            self.status = "Share code copied ({} chars)".format(len(buf))
+                            self.show_toast("Share code copied!")
+                        else:
+                            self.status = "Clipboard blocked — code kept in the box"
+                    elif kind == "import":
+                        try:
+                            self.project = decode_share_code(buf)
+                            self.status = "Imported: " + str(self.project.get("name", ""))
+                            self.show_toast("Project imported!")
+                        except ValueError as e:
+                            self.mode, self.text_kind = "text", "import"
+                            self.status = "Import failed: " + str(e)
+                            self.show_toast("Bad share code — try again")
                 elif ev.key == pygame.K_ESCAPE:
                     self.mode, self.text_kind = "edit", None
                     self.status = "Cancelled."
                 elif ev.key == pygame.K_BACKSPACE:
                     self.text_buf = self.text_buf[:-1]
-                elif ev.unicode and ev.unicode.isprintable() and len(self.text_buf) < 40:
-                    self.text_buf += ev.unicode
+                elif (ev.key == pygame.K_v and (ev.mod & pygame.KMOD_CTRL)
+                      and self.text_kind in ("share", "import")):
+                    clip = read_clipboard()
+                    if clip:
+                        self.text_buf = clip.strip()[:8192]
+                elif ev.unicode and ev.unicode.isprintable():
+                    limit = 8192 if self.text_kind in ("share", "import") else 40
+                    if len(self.text_buf) < limit:
+                        self.text_buf += ev.unicode
             return True
         if ev.type == pygame.KEYDOWN:
             if ev.key == pygame.K_ESCAPE:
@@ -223,6 +334,7 @@ class Editor:
                         {"New": self.new_project, "Open": lambda: self.begin_text("open", "Open project:"),
                          "Save": lambda: self.begin_text("save", "Save as:"),
                          "Playtest": self.playtest, "Export": self.export,
+                         "Share": self.share, "Import": self.import_code,
                          "Quit": lambda: pygame.event.post(pygame.event.Event(pygame.QUIT))}[label]()
                         return True
                 if self.name_rect.collidepoint(ev.pos):
@@ -314,9 +426,15 @@ class Editor:
                    (panel.x + 20, panel.y + 18))
             ibox = pygame.Rect(panel.x + 20, panel.y + 48, panel.w - 40, 34)
             pygame.draw.rect(s, (11, 16, 28), ibox, border_radius=6)
-            txt = font.render(self.text_buf + "_", True, (255, 215, 94))
+            shown = self.text_buf
+            while shown and font.size(shown + "_")[0] > ibox.w - 16:
+                shown = shown[1:]
+            txt = font.render(shown + "_", True, (255, 215, 94))
             s.blit(txt, (ibox.x + 8, ibox.y + 7))
-            s.blit(small.render("Enter = OK    Esc = Cancel", True, (120, 140, 160)),
+            hint_txt = "Enter = OK    Esc = Cancel"
+            if getattr(self, "text_kind", None) in ("share", "import"):
+                hint_txt = "Ctrl+V = paste    Enter = OK    Esc = Cancel"
+            s.blit(small.render(hint_txt, True, (120, 140, 160)),
                    (panel.x + 20, panel.y + 92))
 
 
