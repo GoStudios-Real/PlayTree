@@ -44,3 +44,11 @@ MIT — ©2026 PlayTree Corporation
 
 ---
 *Free on itch.io • Mirrored on GitHub Pages • PlayTree Launcher 1.0.0*
+
+
+---
+
+## OpenCode
+
+This repository is maintained with [OpenCode](https://opencode.ai).
+Hub: https://gostudios-real.github.io/
